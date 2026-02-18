@@ -43,7 +43,7 @@ class PageConfig:
 
     # Label rendering
     label_font_range: Tuple[int, int] = (12, 36)
-    label_offset_range: Tuple[int, int] = (8, 20)
+    label_offset_range: Tuple[int, int] = (10, 20)
     label_rotation_prob: float = 0.15
     label_rotation_range: Tuple[int, int] = (-15, 15)
     label_90deg_prob: float = 0.03
@@ -171,14 +171,32 @@ def draw_rotated_text(
     text_w = text_bbox[2] - text_bbox[0]
     text_h = text_bbox[3] - text_bbox[1]
 
-    text_img = Image.new("RGBA", (text_w + 8, text_h + 8), (255, 255, 255, 0))
+    # Use substantial padding to prevent clipping when rotated
+    padding = max(20, int(max(text_w, text_h) * 0.3))
+    padded_w = text_w + 2 * padding
+    padded_h = text_h + 2 * padding
+    
+    text_img = Image.new("RGBA", (padded_w, padded_h), (255, 255, 255, 0))
     text_draw = ImageDraw.Draw(text_img)
-    text_draw.text((4, 4), text, font=font, fill=fill)
+    text_draw.text((padding, padding), text, font=font, fill=fill)
 
     rotated = text_img.rotate(angle, expand=True)
-    base.paste(rotated, position, rotated)
+    
+    # Position the text so its center aligns with the requested position,
+    # but stay within page bounds
+    cx, cy = position
+    page_w, page_h = base.size
+    
+    # Try to center the rotated text on the requested position
+    x0 = cx - rotated.size[0] // 2
+    y0 = cy - rotated.size[1] // 2
+    
+    # Clamp to page bounds
+    x0 = max(0, min(x0, page_w - rotated.size[0]))
+    y0 = max(0, min(y0, page_h - rotated.size[1]))
+    
+    base.paste(rotated, (x0, y0), rotated)
 
-    x0, y0 = position
     x1 = x0 + rotated.size[0]
     y1 = y0 + rotated.size[1]
     return (x0, y0, x1, y1)
@@ -239,9 +257,6 @@ def add_label_near_structure(
     text_w = text_bbox[2] - text_bbox[0]
     text_h = text_bbox[3] - text_bbox[1]
 
-    # Estimate max rotated dimensions (diagonal for worst case)
-    max_rotated_dim = int(math.sqrt(text_w**2 + text_h**2)) + 16
-
     # 80% chance: place label below and centered
     if random.random() < 0.8:
         pos_x = x0 + (x1 - x0 - text_w) // 2  # Center horizontally
@@ -273,11 +288,6 @@ def add_label_near_structure(
             angle = 90.0
         elif random.random() < cfg.label_rotation_prob:
             angle = random.uniform(*cfg.label_rotation_range)
-
-    # Clamp position with safety margin accounting for potential rotation expansion
-    safety_margin = max_rotated_dim if angle != 0.0 else text_w
-    pos_x = max(cfg.margin, min(pos_x, w - cfg.margin - safety_margin))
-    pos_y = max(cfg.margin, min(pos_y, h - cfg.margin - text_h))
 
     return draw_rotated_text(page, label, (pos_x, pos_y), font, angle)
 
