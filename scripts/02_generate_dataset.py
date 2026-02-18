@@ -651,14 +651,62 @@ RANDOM_IMAGE_GENERATORS = [
 ]
 
 
+def load_distractor_images(distractors_dir: Optional[Path]) -> List[Image.Image]:
+    """Pre-load distractor images from disk (resized to manageable sizes)."""
+    if distractors_dir is None or not distractors_dir.exists():
+        return []
+    imgs: List[Image.Image] = []
+    extensions = ("*.jpg", "*.jpeg", "*.png", "*.webp", "*.bmp")
+    paths: List[Path] = []
+    for ext in extensions:
+        paths.extend(distractors_dir.glob(ext))
+    for p in sorted(paths):
+        try:
+            img = Image.open(p).convert("RGB")
+            # Don't resize here — we resize at paste time for variety
+            imgs.append(img)
+        except Exception:
+            continue
+    return imgs
+
+
+def _pick_distractor_image(
+    distractor_pool: List[Image.Image],
+) -> Image.Image:
+    """Pick a random real distractor image and resize it to a random distractor size."""
+    img = random.choice(distractor_pool).copy()
+    # Random target size typical for a document inset image
+    target_w = random.randint(150, 500)
+    target_h = random.randint(120, 400)
+    img = img.resize((target_w, target_h), Image.LANCZOS)
+    # Optionally convert to grayscale (documents are often B&W)
+    if random.random() < 0.25:
+        img = img.convert("L").convert("RGB")
+    return img
+
+
 def add_random_image(
     page: Image.Image,
     cfg: PageConfig,
     existing: List[Tuple[int, int, int, int]],
+    distractor_pool: Optional[List[Image.Image]] = None,
 ) -> None:
-    """Paste a randomly generated chart / shape / image onto the page."""
-    gen = random.choice(RANDOM_IMAGE_GENERATORS)
-    rand_img = gen()
+    """Paste a distractor image onto the page.
+
+    Uses real images from *distractor_pool* when available (85% of the time),
+    falling back to synthetic chart/shape generators.
+    """
+    use_real = (
+        distractor_pool
+        and len(distractor_pool) > 0
+        and random.random() < 0.85
+    )
+    if use_real:
+        rand_img = _pick_distractor_image(distractor_pool)
+    else:
+        gen = random.choice(RANDOM_IMAGE_GENERATORS)
+        rand_img = gen()
+
     iw, ih = rand_img.size
     w, h = page.size
 
@@ -906,6 +954,7 @@ def make_page(
     smiles_pool: List[str],
     cfg: PageConfig,
     font_paths: List[Path],
+    distractor_pool: Optional[List[Image.Image]] = None,
 ) -> Tuple[Image.Image, List[Tuple[int, int, int, int]]]:
     page = Image.new("RGB", (cfg.page_w, cfg.page_h), (255, 255, 255))
 
@@ -960,11 +1009,14 @@ def make_page(
         if random.random() < 0.5:
             add_stray_text(page, cfg, font_paths, existing_boxes)
 
-    # -- NEW: Random images / charts (1–3) --
-    n_images = random.randint(0, 3)
+    # -- Random images / charts — real + synthetic --
+    # Always place at least 1 image when distractors are available, up to 4
+    if distractor_pool:
+        n_images = random.randint(1, 4)
+    else:
+        n_images = random.randint(0, 2)
     for _ in range(n_images):
-        if random.random() < 0.5:
-            add_random_image(page, cfg, existing_boxes)
+        add_random_image(page, cfg, existing_boxes, distractor_pool)
 
     return page, struct_boxes
 
@@ -1014,6 +1066,7 @@ def generate_dataset(
     seed: int,
     fmt: str,
     fonts_dir: Optional[Path],
+    distractors_dir: Optional[Path] = None,
 ) -> None:
     random.seed(seed)
     np.random.seed(seed)
@@ -1021,6 +1074,13 @@ def generate_dataset(
     cfg = PageConfig()
     smiles_pool = load_smiles(smiles_csv)
     font_paths = find_fonts(fonts_dir)
+
+    # Load real distractor images if available
+    distractor_pool = load_distractor_images(distractors_dir)
+    if distractor_pool:
+        print(f"Loaded {len(distractor_pool)} distractor images from {distractors_dir}")
+    else:
+        print("No distractor images found — using only synthetic generators.")
 
     train_img_dir = out_dir / "train" / "images"
     train_lbl_dir = out_dir / "train" / "labels"
@@ -1034,7 +1094,7 @@ def generate_dataset(
 
     def run_split(count: int, img_dir: Path, lbl_dir: Path, split: str) -> None:
         for i in tqdm(range(count), desc=f"Generating {split}"):
-            page, boxes = make_page(smiles_pool, cfg, font_paths)
+            page, boxes = make_page(smiles_pool, cfg, font_paths, distractor_pool)
             img_path = img_dir / f"{split}_{i:06d}.{fmt}"
             lbl_path = lbl_dir / f"{split}_{i:06d}.txt"
             save_sample(page, boxes, img_path, lbl_path, fmt, cfg)
@@ -1072,6 +1132,12 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Optional directory of .ttf/.otf fonts",
     )
+    parser.add_argument(
+        "--distractors-dir",
+        type=Path,
+        default=None,
+        help="Directory of distractor images (downloaded via download_distractor_images.py)",
+    )
     return parser.parse_args()
 
 
@@ -1090,6 +1156,7 @@ def main() -> int:
         seed=args.seed,
         fmt=args.format,
         fonts_dir=args.fonts_dir,
+        distractors_dir=args.distractors_dir,
     )
 
     print(f"\nDone. Dataset saved under {args.out}")
