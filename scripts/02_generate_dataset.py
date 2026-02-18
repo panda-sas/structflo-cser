@@ -3,15 +3,18 @@
 Synthetic page generator with distractors.
 
 Generates document-like pages containing:
-  - Chemical structures (annotated as class 0 for YOLO)
-  - Label IDs near structures (not annotated)
+  - Chemical structures with nearby label IDs, annotated together as a single
+    compound-panel bounding box (class 0 for YOLO — union of struct + label)
   - Distractor elements: prose, captions, arrows, panel borders, page numbers
+    (NOT annotated — implicit negatives for YOLO)
 
-Output: YOLO-format dataset (images/ + labels/ with only structure bboxes).
+Output: YOLO-format dataset (images/ + labels/ with union struct+label bboxes).
+         Ground-truth JSON (ground_truth/) with split struct/label boxes + text.
 """
 
 import argparse
 import csv
+import json
 import math
 import os
 import random
@@ -260,7 +263,7 @@ def add_label_near_structure(
     struct_box: Tuple[int, int, int, int],
     cfg: PageConfig,
     font_paths: List[Path],
-) -> Tuple[int, int, int, int]:
+) -> Tuple[Tuple[int, int, int, int], str]:
     w, h = page.size
     label = random_label()
     font_size = random.randint(*cfg.label_font_range)
@@ -306,7 +309,8 @@ def add_label_near_structure(
         elif random.random() < cfg.label_rotation_prob:
             angle = random.uniform(*cfg.label_rotation_range)
 
-    return draw_rotated_text(page, label, (pos_x, pos_y), font, angle)
+    label_box = draw_rotated_text(page, label, (pos_x, pos_y), font, angle)
+    return label_box, label
 
 
 def try_place_box(
@@ -343,8 +347,8 @@ def add_prose_block(
     font_size = random.randint(14, 18)
     font = load_font(font_paths, font_size)
     line_h = font_size + 4
-    n_lines = random.randint(4, 12)
-    block_w = random.randint(w // 4, w // 2)
+    n_lines = random.randint(8, 22)
+    block_w = random.randint(w // 3, w * 3 // 4)
     block_h = n_lines * line_h
 
     box = try_place_box(w, h, block_w, block_h, cfg.margin, existing)
@@ -897,7 +901,7 @@ def add_multiline_text_block(
     font = load_font(font_paths, font_size)
     line_h = font_size + 3
     n_lines = random.randint(3, 8)
-    block_w = random.randint(w // 5, w // 3)
+    block_w = random.randint(w // 3, w * 2 // 3)
     block_h = n_lines * line_h
 
     box = try_place_box(w, h, block_w, block_h, cfg.margin, existing)
@@ -982,11 +986,11 @@ def make_page(
     cfg: PageConfig,
     font_paths: List[Path],
     distractor_pool: Optional[List[Image.Image]] = None,
-) -> Tuple[Image.Image, List[Tuple[int, int, int, int]]]:
+) -> Tuple[Image.Image, List[dict]]:
     page = Image.new("RGB", (cfg.page_w, cfg.page_h), (255, 255, 255))
 
     existing_boxes: List[Tuple[int, int, int, int]] = []
-    struct_boxes: List[Tuple[int, int, int, int]] = []
+    panels: List[dict] = []
 
     n_structures = random.randint(cfg.min_structures, cfg.max_structures)
     random.shuffle(smiles_pool)
@@ -1013,7 +1017,7 @@ def make_page(
 
         if two_column:
             assert col_x_ranges is not None
-            col = len(struct_boxes) % 2
+            col = len(panels) % 2
             box = place_structure(
                 page, struct_img, cfg, existing_boxes,
                 x_range=col_x_ranges[col], y_range=col_y_range,
@@ -1023,54 +1027,70 @@ def make_page(
         if box is None:
             continue
 
-        struct_boxes.append(box)
         existing_boxes.append(box)
 
+        label_box: Optional[Tuple[int, int, int, int]] = None
+        label_text: Optional[str] = None
         # ~10% of structures have no label (e.g. scaffold in a series)
         if random.random() > 0.10:
-            label_box = add_label_near_structure(page, box, cfg, font_paths)
+            label_box, label_text = add_label_near_structure(page, box, cfg, font_paths)
             existing_boxes.append(label_box)
 
-        if len(struct_boxes) >= n_structures:
+        panels.append({
+            "struct_box": box,
+            "label_box": label_box,
+            "label_text": label_text,
+            "smiles": smi,
+        })
+
+        if len(panels) >= n_structures:
             break
 
-    # -- Distractor: text elements (overlap-aware) --
-    add_prose_block(page, cfg, font_paths, existing_boxes)
-    add_caption(page, cfg, font_paths, existing_boxes)
-    add_page_number(page, cfg, font_paths, existing_boxes)
-    add_rgroup_table(page, cfg, font_paths, existing_boxes)
-    add_stray_text(page, cfg, font_paths, existing_boxes)
-    add_arrow(page, cfg, existing_boxes)
-    add_panel_border(page, cfg, existing_boxes)
-
-    # -- NEW: Additional random text blocks --
-    if random.random() < 0.5:
-        add_section_header(page, cfg, font_paths, existing_boxes)
-    if random.random() < 0.4:
-        add_footnote(page, cfg, font_paths, existing_boxes)
-    if random.random() < 0.35:
+    # -- Distractors: text elements --
+    # Prose blocks: always 2-4 large blocks to fill the page
+    for _ in range(random.randint(2, 4)):
+        add_prose_block(page, cfg, font_paths, existing_boxes)
+    # Multiline text blocks: 3-6 per page
+    for _ in range(random.randint(3, 6)):
+        add_multiline_text_block(page, cfg, font_paths, existing_boxes)
+    # Captions: 1-3 per page
+    for _ in range(random.randint(1, 3)):
+        add_caption(page, cfg, font_paths, existing_boxes)
+    # Stray text: 4-8 snippets per page
+    for _ in range(random.randint(4, 8)):
+        add_stray_text(page, cfg, font_paths, existing_boxes)
+    # Equation fragments: 2-4 per page
+    for _ in range(random.randint(2, 4)):
         add_equation_fragment(page, cfg, font_paths, existing_boxes)
-    if random.random() < 0.3:
-        add_journal_header(page, cfg, font_paths, existing_boxes)
-    # Extra multiline blocks (1–2)
+    # Section headers: 1-3 per page
+    for _ in range(random.randint(1, 3)):
+        add_section_header(page, cfg, font_paths, existing_boxes)
+    # Footnotes: 0-2
     for _ in range(random.randint(0, 2)):
-        if random.random() < 0.45:
-            add_multiline_text_block(page, cfg, font_paths, existing_boxes)
-    # Extra stray text snippets (0–3)
+        add_footnote(page, cfg, font_paths, existing_boxes)
+    # Journal header: most pages have one
+    if random.random() < 0.8:
+        add_journal_header(page, cfg, font_paths, existing_boxes)
+    # R-group tables: 0-2 per page
+    for _ in range(random.randint(0, 2)):
+        add_rgroup_table(page, cfg, font_paths, existing_boxes)
+    # Arrows: 0-3
     for _ in range(random.randint(0, 3)):
-        if random.random() < 0.5:
-            add_stray_text(page, cfg, font_paths, existing_boxes)
+        add_arrow(page, cfg, existing_boxes)
+    # Panel borders: 0-2
+    for _ in range(random.randint(0, 2)):
+        add_panel_border(page, cfg, existing_boxes)
+    add_page_number(page, cfg, font_paths, existing_boxes)
 
-    # -- Random images / charts — real + synthetic --
-    # Always place at least 1 image when distractors are available, up to 4
+    # -- Random images / charts --
     if distractor_pool:
-        n_images = random.randint(1, 4)
+        n_images = random.randint(2, 5)
     else:
-        n_images = random.randint(0, 2)
+        n_images = random.randint(1, 3)
     for _ in range(n_images):
         add_random_image(page, cfg, existing_boxes, distractor_pool)
 
-    return page, struct_boxes
+    return page, panels
 
 
 def yolo_label(box: Tuple[int, int, int, int], w: int, h: int) -> str:
@@ -1093,9 +1113,10 @@ def find_fonts(fonts_dir: Optional[Path]) -> List[Path]:
 
 def save_sample(
     page: Image.Image,
-    struct_boxes: List[Tuple[int, int, int, int]],
+    panels: List[dict],
     out_img: Path,
     out_lbl: Path,
+    out_gt: Path,
     fmt: str,
     cfg: PageConfig,
 ) -> None:
@@ -1106,8 +1127,30 @@ def save_sample(
     else:
         page.save(out_img, format="PNG")
 
-    labels = [yolo_label(box, cfg.page_w, cfg.page_h) for box in struct_boxes]
-    out_lbl.write_text("\n".join(labels))
+    yolo_lines = []
+    gt_records = []
+    for p in panels:
+        sb = p["struct_box"]
+        lb = p["label_box"]
+        if lb is not None:
+            union = clamp_box(
+                (min(sb[0], lb[0]), min(sb[1], lb[1]),
+                 max(sb[2], lb[2]), max(sb[3], lb[3])),
+                cfg.page_w, cfg.page_h,
+            )
+        else:
+            union = clamp_box(sb, cfg.page_w, cfg.page_h)
+        yolo_lines.append(yolo_label(union, cfg.page_w, cfg.page_h))
+        gt_records.append({
+            "union_bbox":  list(union),
+            "struct_bbox": list(sb),
+            "label_bbox":  list(lb) if lb is not None else None,
+            "label_text":  p["label_text"],
+            "smiles":      p["smiles"],
+        })
+
+    out_lbl.write_text("\n".join(yolo_lines))
+    out_gt.write_text(json.dumps(gt_records, indent=2))
 
 
 def generate_dataset(
@@ -1136,23 +1179,25 @@ def generate_dataset(
 
     train_img_dir = out_dir / "train" / "images"
     train_lbl_dir = out_dir / "train" / "labels"
-    val_img_dir = out_dir / "val" / "images"
-    val_lbl_dir = out_dir / "val" / "labels"
+    train_gt_dir  = out_dir / "train" / "ground_truth"
+    val_img_dir   = out_dir / "val" / "images"
+    val_lbl_dir   = out_dir / "val" / "labels"
+    val_gt_dir    = out_dir / "val" / "ground_truth"
 
-    train_img_dir.mkdir(parents=True, exist_ok=True)
-    train_lbl_dir.mkdir(parents=True, exist_ok=True)
-    val_img_dir.mkdir(parents=True, exist_ok=True)
-    val_lbl_dir.mkdir(parents=True, exist_ok=True)
+    for d in (train_img_dir, train_lbl_dir, train_gt_dir,
+              val_img_dir, val_lbl_dir, val_gt_dir):
+        d.mkdir(parents=True, exist_ok=True)
 
-    def run_split(count: int, img_dir: Path, lbl_dir: Path, split: str) -> None:
+    def run_split(count: int, img_dir: Path, lbl_dir: Path, gt_dir: Path, split: str) -> None:
         for i in tqdm(range(count), desc=f"Generating {split}"):
-            page, boxes = make_page(smiles_pool, cfg, font_paths, distractor_pool)
+            page, panels = make_page(smiles_pool, cfg, font_paths, distractor_pool)
             img_path = img_dir / f"{split}_{i:06d}.{fmt}"
             lbl_path = lbl_dir / f"{split}_{i:06d}.txt"
-            save_sample(page, boxes, img_path, lbl_path, fmt, cfg)
+            gt_path  = gt_dir  / f"{split}_{i:06d}.json"
+            save_sample(page, panels, img_path, lbl_path, gt_path, fmt, cfg)
 
-    run_split(num_train, train_img_dir, train_lbl_dir, "train")
-    run_split(num_val, val_img_dir, val_lbl_dir, "val")
+    run_split(num_train, train_img_dir, train_lbl_dir, train_gt_dir, "train")
+    run_split(num_val, val_img_dir, val_lbl_dir, val_gt_dir, "val")
 
 
 def parse_args() -> argparse.Namespace:

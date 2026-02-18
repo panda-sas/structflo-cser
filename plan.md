@@ -10,34 +10,31 @@ extract SMILES via DECIMER, extract label text via constrained OCR.
 
 ## 1. Architecture Overview
 
-### 1.1 Two-Detector Design
+### 1.1 Architecture
 
-Rather than a single YOLO model for both structures and text, we use purpose-built detectors:
+A single YOLO model detects **compound panels** — bounding boxes that tightly enclose both the
+chemical structure and its nearby label ID together. Each panel crop is then sent to two
+purpose-built recognizers in parallel:
 
-| Component | Model | Detects | Why |
-|-----------|-------|---------|-----|
-| **Structure detector** | YOLO11l (OBB task) | Chemical structure bounding boxes | Structures are large, distinctive blobs — YOLO excels here |
-| **Text detector** | PaddleOCR DBNet | All text regions (labels + distractors) | Purpose-built for small/rotated/dense text localization |
-| **Text recognizer** | PaddleOCR recognizer | Characters in detected text boxes | Integrated with DBNet in PaddleOCR pipeline |
-| **Label classifier** | Regex + charset filter | Separates label IDs from prose/captions | IDs have distinctive patterns; no ML needed |
-| **Structure recognizer** | DECIMER | Structure crop → SMILES | Proven OCSR engine |
+| Component | Model | Task | Why |
+|-----------|-------|------|-----|
+| **Panel detector** | YOLO11l | Detect union bbox of structure + label | One model, no pairing needed |
+| **Structure recognizer** | DECIMER | Panel crop → SMILES | Ignores label text automatically |
+| **Label recognizer** | PaddleOCR | Panel crop → label string | Small crop = one text element, trivial for OCR |
 
 **Pipeline flow:**
 ```
 Page image
-  ├─→ YOLO11 (structure detection) ──→ structure bboxes
-  ├─→ PaddleOCR DBNet (text detection + recognition) ──→ all text boxes + strings
-  │     └─→ Regex/charset filter ──→ label candidate boxes + strings
-  └─→ Pairing (structures × label candidates) ──→ matched pairs
-        ├─→ Crop structure → DECIMER → SMILES
-        └─→ Label text already recognized by PaddleOCR
+  └─→ YOLO11 (compound panel detection)
+        └─→ For each panel crop:
+              ├─→ DECIMER → SMILES  (ignores label text)
+              └─→ PaddleOCR → label string  (only one text item in frame)
 ```
 
-**Why not one YOLO for both?** Labels are small text — sometimes 20–40px on a full page.
-Generic object detectors lose recall on text at that scale. PaddleOCR's DBNet is trained on
-millions of text instances with specific architectural features (differentiable binarization,
-adaptive thresholds) that YOLO's backbone doesn't have. The structure detector can focus purely
-on the easier task of finding chemical drawings.
+**Why a union bbox?** The structure and its label are always spatially coupled — annotating them
+together eliminates the pairing problem entirely. DECIMER is robust to label text appearing in
+the same crop. PaddleOCR operating on a small, isolated crop with a single text element is far
+more reliable than running on the full page and filtering with regex.
 
 ### 1.2 Inference: Tiling, Not Resizing
 
@@ -171,16 +168,17 @@ structure-only canvases. Failure to include distractors is the #1 cause of domai
 
 ### 4.2 YOLO Training Classes
 
-For the structure detector, we train with **one class only**:
+We train with **one class only**:
 
 | Class ID | Name | Annotation |
 |----------|------|------------|
-| 0 | `chemical_structure` | All 2D chemical structure drawings |
+| 0 | `compound_panel` | Union bbox of chemical structure + its label ID |
 
-We do NOT train YOLO to detect labels. PaddleOCR handles that.
+The union bbox is computed as `min/max` of the struct and label bounding boxes. For the ~10% of
+structures that have no label, the annotation is just the structure bbox.
 
-But we DO need the distractors in the training images so YOLO learns to NOT fire on text blocks,
-arrows, tables, etc. These go in the image but get no annotation — they're implicit negatives.
+Distractors (prose, captions, arrows, tables, charts) appear in the image but get no annotation
+— they are implicit negatives that teach YOLO not to fire on non-panel content.
 
 ### 4.3 `01_fetch_smiles.py`
 
@@ -863,15 +861,13 @@ if __name__ == "__main__":
 
 ```yaml
 # config/data.yaml
-# NOTE: YOLO trains on structure detection ONLY (1 class).
-# Text/label detection is handled by PaddleOCR at inference time.
 path: data/generated
 train: train
 val: val
 
 nc: 1
 names:
-  0: chemical_structure
+  0: compound_panel
 ```
 
 ---
@@ -920,7 +916,7 @@ def train():
         copy_paste=0.0,
 
         project="runs/chemlabeldetect",
-        name="yolo11l_structures",
+        name="yolo11l_panels",
         workers=8,
         seed=42,
         plots=True,
@@ -1024,154 +1020,11 @@ def nms_merge(boxes: np.ndarray, scores: np.ndarray,
 
 ---
 
-## 8. Pairing: `utils/pairing.py`
+## 8. ~~Pairing: `utils/pairing.py`~~ — Not needed
 
-Multi-signal matching: edge distance + directional bias + column awareness.
-
-```python
-"""Structure↔label pairing with multiple cost signals."""
-
-import numpy as np
-from scipy.optimize import linear_sum_assignment
-from dataclasses import dataclass
-
-
-@dataclass
-class PairingConfig:
-    max_distance_px: float = 400
-    w_distance: float = 1.0         # Base edge-distance weight
-    w_below_bias: float = 0.6       # Multiply cost if label is below struct
-    w_column_penalty: float = 2.5   # Multiply cost if label is in a different column
-    column_split_method: str = "whitespace"  # "whitespace" or "midpoint"
-
-
-def detect_columns(struct_boxes: list[np.ndarray],
-                   page_w: int, method: str = "whitespace") -> list[tuple]:
-    """
-    Detect column boundaries from structure x-coordinates.
-    Returns list of (x_left, x_right) column bounds.
-    """
-    if len(struct_boxes) < 2 or method == "midpoint":
-        return [(0, page_w)]
-
-    # Whitespace projection: find vertical gaps
-    centers_x = sorted([(b[0] + b[2]) / 2 for b in struct_boxes])
-
-    if len(centers_x) < 2:
-        return [(0, page_w)]
-
-    gaps = [(centers_x[i + 1] + centers_x[i]) / 2
-            for i in range(len(centers_x) - 1)
-            if centers_x[i + 1] - centers_x[i] > page_w * 0.25]
-
-    if not gaps:
-        return [(0, page_w)]
-
-    # Build column boundaries from gaps
-    bounds = [(0, gaps[0])]
-    for i in range(len(gaps) - 1):
-        bounds.append((gaps[i], gaps[i + 1]))
-    bounds.append((gaps[-1], page_w))
-
-    return bounds
-
-
-def get_column(x_center: float, columns: list[tuple]) -> int:
-    for i, (xl, xr) in enumerate(columns):
-        if xl <= x_center <= xr:
-            return i
-    return -1
-
-
-def compute_cost_matrix(
-    structs: list[dict],
-    labels: list[dict],
-    page_w: int,
-    cfg: PairingConfig,
-) -> np.ndarray:
-    """
-    Build cost matrix incorporating multiple signals:
-      1. Edge-to-edge distance (base)
-      2. Below-bias (labels below structures are cheaper)
-      3. Column penalty (labels in different column are expensive)
-      4. Horizontal alignment bonus (label centered under structure)
-    """
-    n_s, n_l = len(structs), len(labels)
-    cost = np.full((n_s, n_l), 1e9)
-
-    struct_boxes = [s["bbox"] for s in structs]
-    columns = detect_columns(struct_boxes, page_w, cfg.column_split_method)
-
-    for i, s in enumerate(structs):
-        sb = s["bbox"]
-        s_cx = (sb[0] + sb[2]) / 2
-        s_cy = (sb[1] + sb[3]) / 2
-        s_col = get_column(s_cx, columns)
-
-        for j, l in enumerate(labels):
-            lb = l["bbox"]
-            l_cx = (lb[0] + lb[2]) / 2
-            l_cy = (lb[1] + lb[3]) / 2
-            l_col = get_column(l_cx, columns)
-
-            # 1. Edge distance
-            dx = max(0, max(sb[0] - lb[2], lb[0] - sb[2]))
-            dy = max(0, max(sb[1] - lb[3], lb[1] - sb[3]))
-            dist = np.sqrt(dx**2 + dy**2)
-
-            if dist > cfg.max_distance_px:
-                continue
-
-            c = dist * cfg.w_distance
-
-            # 2. Below-bias
-            if l_cy > s_cy:
-                c *= cfg.w_below_bias
-
-            # 3. Column penalty
-            if s_col != l_col and s_col >= 0 and l_col >= 0:
-                c *= cfg.w_column_penalty
-
-            # 4. Horizontal alignment bonus
-            x_offset = abs(s_cx - l_cx) / max(sb[2] - sb[0], 1)
-            if x_offset < 0.5:  # Label roughly centered under struct
-                c *= 0.85
-
-            cost[i, j] = c
-
-    return cost
-
-
-def pair(structs, labels, page_w, cfg=None):
-    """
-    Hungarian matching of structures to labels.
-    Returns: list of (struct_dict, label_dict_or_None)
-    """
-    if cfg is None:
-        cfg = PairingConfig()
-    if not structs:
-        return []
-    if not labels:
-        return [(s, None) for s in structs]
-
-    cost = compute_cost_matrix(structs, labels, page_w, cfg)
-    row_idx, col_idx = linear_sum_assignment(cost)
-
-    paired_s = set()
-    results = []
-    for r, c in zip(row_idx, col_idx):
-        if cost[r, c] < cfg.max_distance_px * 3:  # Reasonable upper bound
-            results.append((structs[r], labels[c]))
-        else:
-            results.append((structs[r], None))
-        paired_s.add(r)
-
-    for i in range(len(structs)):
-        if i not in paired_s:
-            results.append((structs[i], None))
-
-    return results
-```
+Structure↔label pairing is no longer required. YOLO detects the union bbox of each
+structure+label panel, so the two are already coupled at detection time. The `utils/pairing.py`
+module and `scipy` dependency can be removed.
 
 ---
 
@@ -1313,11 +1166,10 @@ def decode_label(raw_text: str, cfg: LabelDecoderConfig = None) -> dict:
 """
 Full inference pipeline:
   1. Tile page
-  2. Run YOLO11 on tiles → structure boxes (merge via NMS)
-  3. Run PaddleOCR on tiles → all text boxes + strings (merge via NMS)
-  4. Filter text to label candidates (charset/regex)
-  5. Pair structures ↔ labels (multi-signal Hungarian matching)
-  6. Crop structures → DECIMER → SMILES
+  2. Run YOLO11 on tiles → compound panel boxes (struct+label union, merge via NMS)
+  3. For each panel crop:
+     a. DECIMER → SMILES  (ignores label text automatically)
+     b. PaddleOCR → label string  (only one text item in the small crop)
 
 Usage:
   python scripts/04_pipeline.py --image page.png
@@ -1334,55 +1186,37 @@ import numpy as np
 from PIL import Image
 from ultralytics import YOLO
 from paddleocr import PaddleOCR
+from tqdm import tqdm
 
 from utils.tiling import TileConfig, generate_tiles, tile_local_to_global, nms_merge
-from utils.pairing import PairingConfig, pair
-from utils.label_decode import LabelDecoderConfig, decode_label
 
 
 class ChemLabelPipeline:
 
     def __init__(
         self,
-        yolo_weights: str = "runs/chemlabeldetect/yolo11l_structures/weights/best.pt",
+        yolo_weights: str = "runs/chemlabeldetect/yolo11l_panels/weights/best.pt",
         tile_cfg: TileConfig = None,
-        pair_cfg: PairingConfig = None,
-        label_cfg: LabelDecoderConfig = None,
         yolo_conf: float = 0.5,
     ):
         self.yolo = YOLO(yolo_weights)
-        self.ocr = PaddleOCR(
-            use_angle_cls=True,
-            lang='en',
-            use_gpu=True,
-            det_db_score_mode='slow',    # Better accuracy for small text
-            det_db_box_thresh=0.3,
-        )
+        self.ocr = PaddleOCR(use_angle_cls=True, lang='en', use_gpu=True)
         self.tile_cfg = tile_cfg or TileConfig()
-        self.pair_cfg = pair_cfg or PairingConfig()
-        self.label_cfg = label_cfg or LabelDecoderConfig()
         self.yolo_conf = yolo_conf
 
-    def _detect_structures_tiled(self, img: np.ndarray) -> list[dict]:
-        """Run YOLO on tiles, merge results."""
+    def _detect_panels_tiled(self, img: np.ndarray) -> list[dict]:
+        """Run YOLO on tiles, merge panel boxes via NMS."""
         h, w = img.shape[:2]
         tiles = generate_tiles(w, h, self.tile_cfg)
 
-        all_boxes = []
-        all_scores = []
-
+        all_boxes, all_scores = [], []
         for (x1, y1, x2, y2) in tiles:
             tile = img[y1:y2, x1:x2]
             results = self.yolo(tile, imgsz=self.tile_cfg.tile_size,
                                 conf=self.yolo_conf, verbose=False)[0]
-
             for box in results.boxes:
-                if int(box.cls[0]) != 0:
-                    continue
                 local_bbox = box.xyxy[0].cpu().numpy()
-                global_bbox = tile_local_to_global(
-                    local_bbox.reshape(1, 4), (x1, y1)
-                )[0]
+                global_bbox = tile_local_to_global(local_bbox.reshape(1, 4), (x1, y1))[0]
                 all_boxes.append(global_bbox)
                 all_scores.append(float(box.conf[0]))
 
@@ -1392,108 +1226,57 @@ class ChemLabelPipeline:
         boxes_arr = np.array(all_boxes)
         scores_arr = np.array(all_scores)
         keep = nms_merge(boxes_arr, scores_arr, self.tile_cfg.nms_iou_thresh)
-
         return [{"bbox": boxes_arr[i], "conf": scores_arr[i]} for i in keep]
 
-    def _detect_text_tiled(self, img: np.ndarray) -> list[dict]:
-        """Run PaddleOCR on tiles, filter to label candidates, merge."""
-        h, w = img.shape[:2]
-        tiles = generate_tiles(w, h, self.tile_cfg)
-
-        all_entries = []
-
-        for (x1, y1, x2, y2) in tiles:
-            tile = img[y1:y2, x1:x2]
-            result = self.ocr.ocr(tile, cls=True)
-
-            if result is None or result[0] is None:
-                continue
-
-            for line in result[0]:
-                # line: [bbox_points, (text, confidence)]
-                points = np.array(line[0])          # [[x1,y1],[x2,y2],[x3,y3],[x4,y4]]
-                text, conf = line[1]
-
-                # Convert polygon to axis-aligned bbox
-                lx1 = points[:, 0].min() + x1       # Shift to global
-                ly1 = points[:, 1].min() + y1
-                lx2 = points[:, 0].max() + x1
-                ly2 = points[:, 1].max() + y1
-
-                # Apply constrained decoding
-                decoded = decode_label(text, self.label_cfg)
-
-                all_entries.append({
-                    "bbox": np.array([lx1, ly1, lx2, ly2]),
-                    "raw_text": text,
-                    "decoded_text": decoded["text"],
-                    "decode_conf": decoded["confidence"],
-                    "ocr_conf": conf,
-                    "pattern_matched": decoded["pattern_matched"],
-                })
-
-        # Filter: keep only entries that matched a known label pattern
-        # or have high charset match ratio
-        label_candidates = [
-            e for e in all_entries
-            if e["pattern_matched"] is not None or e["decode_conf"] >= 0.7
-        ]
-
-        # NMS to deduplicate across tile overlaps
-        if not label_candidates:
-            return []
-
-        boxes = np.array([e["bbox"] for e in label_candidates])
-        scores = np.array([e["ocr_conf"] for e in label_candidates])
-        keep = nms_merge(boxes, scores, 0.5)
-
-        return [label_candidates[i] for i in keep]
-
-    def _extract_smiles(self, struct_crop: Image.Image) -> str:
+    def _extract_smiles(self, crop: Image.Image) -> str:
         from DECIMER import predict_SMILES
         with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
-            struct_crop.save(f.name)
+            crop.save(f.name)
             try:
                 return predict_SMILES(f.name)
             finally:
                 os.unlink(f.name)
 
+    def _extract_label(self, crop: Image.Image) -> tuple[str | None, float]:
+        """Run PaddleOCR on a small panel crop; return (text, confidence)."""
+        import numpy as np
+        result = self.ocr.ocr(np.array(crop), cls=True)
+        if not result or not result[0]:
+            return None, 0.0
+        # Pick the highest-confidence text line
+        best_text, best_conf = "", 0.0
+        for line in result[0]:
+            text, conf = line[1]
+            if conf > best_conf:
+                best_text, best_conf = text, conf
+        return best_text or None, best_conf
+
     def process(self, image_path: str) -> list[dict]:
         img_pil = Image.open(image_path).convert("RGB")
         img_np = np.array(img_pil)
-        page_w = img_np.shape[1]
 
-        # 1. Detect structures
-        structs = self._detect_structures_tiled(img_np)
+        panels = self._detect_panels_tiled(img_np)
 
-        # 2. Detect + recognize text, filter to label candidates
-        labels = self._detect_text_tiled(img_np)
-
-        # 3. Pair
-        pairs = pair(structs, labels, page_w, self.pair_cfg)
-
-        # 4. Extract SMILES
         results = []
-        for s, l in pairs:
-            sb = s["bbox"]
+        for p in panels:
+            bb = p["bbox"]
             pad = 10
             crop_box = (
-                max(0, int(sb[0]) - pad),
-                max(0, int(sb[1]) - pad),
-                min(img_pil.width, int(sb[2]) + pad),
-                min(img_pil.height, int(sb[3]) + pad),
+                max(0, int(bb[0]) - pad), max(0, int(bb[1]) - pad),
+                min(img_pil.width, int(bb[2]) + pad),
+                min(img_pil.height, int(bb[3]) + pad),
             )
-            struct_crop = img_pil.crop(crop_box)
-            smiles = self._extract_smiles(struct_crop)
+            crop = img_pil.crop(crop_box)
+
+            smiles = self._extract_smiles(crop)
+            label_text, label_conf = self._extract_label(crop)
 
             results.append({
                 "smiles": smiles,
-                "label": l["decoded_text"] if l else None,
-                "label_raw": l["raw_text"] if l else None,
-                "label_conf": round(l["ocr_conf"], 3) if l else None,
-                "struct_bbox": sb.tolist(),
-                "label_bbox": l["bbox"].tolist() if l else None,
-                "struct_conf": round(s["conf"], 3),
+                "label": label_text,
+                "label_conf": round(label_conf, 3),
+                "panel_bbox": bb.tolist(),
+                "panel_conf": round(p["conf"], 3),
             })
 
         return results
@@ -1504,26 +1287,22 @@ def main():
     parser.add_argument("--image", help="Single image path")
     parser.add_argument("--image_dir", help="Directory of images")
     parser.add_argument("--weights",
-                        default="runs/chemlabeldetect/yolo11l_structures/weights/best.pt")
+                        default="runs/chemlabeldetect/yolo11l_panels/weights/best.pt")
     parser.add_argument("--output", default="results.json")
     args = parser.parse_args()
 
     pipeline = ChemLabelPipeline(yolo_weights=args.weights)
 
     all_results = {}
-    if args.image:
-        paths = [Path(args.image)]
-    else:
-        paths = sorted(Path(args.image_dir).glob("*.png"))
+    paths = [Path(args.image)] if args.image else sorted(Path(args.image_dir).glob("*.png"))
 
-    from tqdm import tqdm
     for p in tqdm(paths):
         try:
             all_results[p.name] = pipeline.process(str(p))
         except Exception as e:
             all_results[p.name] = {"error": str(e)}
 
-    with open(args.output, 'w') as f:
+    with open(args.output, "w") as f:
         json.dump(all_results, f, indent=2)
     print(f"Saved {args.output}")
 
@@ -1554,21 +1333,20 @@ python scripts/02_generate_dataset.py
 
 # ── Step 3: Spot-check data ──────────────────────────────────────
 # Open a few generated images. Verify:
-#   - Structures look like real molecules (different sizes, styles)
-#   - Labels are near structures (various positions)
-#   - Distractor text, arrows, captions are present
-#   - Some labels are slightly rotated
-# Overlay YOLO labels on images to verify bbox accuracy:
-python scripts/06_visualize.py --check_gt data/generated/val/images/val_000000.png
+#   - YOLO boxes (visualize_labels.py) cover both structure AND label together
+#   - ground_truth/*.json shows correct union_bbox, struct_bbox, label_bbox, label_text
+#   - Distractor text, arrows, captions are present but have no annotation
+python scripts/visualize_labels.py --split val --n 20 --out data/viz
 
-# ── Step 4: Train YOLO11 (structures only) ───────────────────────
+# ── Step 4: Train YOLO11 (compound panel detection) ──────────────
 python scripts/03_train.py
-# ~45 min on A6000. Monitor: runs/chemlabeldetect/yolo11l_structures/
+# ~45 min on A6000. Monitor: runs/chemlabeldetect/yolo11l_panels/
 # Target: mAP50 > 0.95
 
 # ── Step 5: Test pipeline on synthetic val images ────────────────
 python scripts/04_pipeline.py \
   --image_dir data/generated/val/images/ \
+  --weights runs/chemlabeldetect/yolo11l_panels/weights/best.pt \
   --output val_results.json
 
 # ── Step 6: Test on REAL document images ─────────────────────────
@@ -1588,12 +1366,11 @@ python scripts/05_evaluate.py \
 
 | Symptom | Cause | Fix |
 |---------|-------|-----|
-| Structure mAP50 < 0.90 | Too few distractors, model fires on everything | Add more prose blocks, increase `stray_text_prob` |
-| Structures detected but labels missing | PaddleOCR not finding text at page scale | Verify tiling covers full page; lower `det_db_box_thresh` to 0.2 |
-| Wrong label paired to structure | Dense layout, proximity fails | Lower `max_distance_px`; increase `w_column_penalty`; verify column detection |
-| OCR reads `SACCOO05` instead of `SACC0005` | O/0 confusion | `label_decode.py` handles this — verify `fix_confusions()` runs |
+| Panel mAP50 < 0.90 | Too few distractors, model fires on prose/tables | Add more prose blocks, increase `stray_text_prob` |
+| Panel box cuts off label | Label placed far from structure, union box clipped | Check `label_offset_range`; verify `clamp_box` in `save_sample` |
+| OCR reads wrong label from crop | Multiple text items in panel crop (label far from struct) | Tighten `label_offset_range` in `PageConfig` so label stays close |
 | Good on synthetic, bad on real | Domain gap | Mix 50–100 annotated real pages into training; increase noise parameters |
-| DECIMER invalid SMILES | Label text leaking into structure crop | Tighten crop padding; binarize crops before DECIMER |
+| DECIMER invalid SMILES | Unusual structure or low crop quality | Binarize crops before DECIMER; check crop padding |
 | Slow inference | DECIMER is bottleneck (~1-2s per structure) | Batch structure crops; or use MolScribe (faster) |
 | OOM during training | Batch too large at imgsz=1280 | Reduce batch to 8; or use yolo11m instead of yolo11l |
 
