@@ -16,6 +16,7 @@ import math
 import os
 import random
 import string
+import textwrap
 from dataclasses import dataclass
 from io import BytesIO
 from pathlib import Path
@@ -145,13 +146,18 @@ def render_structure(smiles: str, size: int, cfg: PageConfig) -> Optional[Image.
     return cropped
 
 
-def load_font(font_paths: List[Path], size: int) -> ImageFont.ImageFont:
-    if font_paths:
-        for path in font_paths:
-            try:
-                return ImageFont.truetype(str(path), size=size)
-            except Exception:
-                continue
+def load_font(font_paths: List[Path], size: int, prefer_bold: bool = False) -> ImageFont.ImageFont:
+    paths = list(font_paths)
+    if prefer_bold:
+        bold_paths = [p for p in paths if "bold" in p.name.lower()]
+        if bold_paths:
+            paths = bold_paths
+    random.shuffle(paths)
+    for path in paths:
+        try:
+            return ImageFont.truetype(str(path), size=size)
+        except Exception:
+            continue
     try:
         return ImageFont.truetype("DejaVuSans.ttf", size=size)
     except Exception:
@@ -221,13 +227,23 @@ def place_structure(
     cfg: PageConfig,
     existing_boxes: List[Tuple[int, int, int, int]],
     max_tries: int = 80,
+    x_range: Optional[Tuple[int, int]] = None,
+    y_range: Optional[Tuple[int, int]] = None,
 ) -> Optional[Tuple[int, int, int, int]]:
     w, h = page.size
     sw, sh = struct_img.size
 
+    x_lo = x_range[0] if x_range else cfg.margin
+    x_hi = (x_range[1] - sw) if x_range else (w - cfg.margin - sw)
+    y_lo = y_range[0] if y_range else cfg.margin
+    y_hi = (y_range[1] - sh) if y_range else (h - cfg.margin - sh)
+
+    if x_lo >= x_hi or y_lo >= y_hi:
+        return None
+
     for _ in range(max_tries):
-        x = random.randint(cfg.margin, w - cfg.margin - sw)
-        y = random.randint(cfg.margin, h - cfg.margin - sh)
+        x = random.randint(x_lo, x_hi)
+        y = random.randint(y_lo, y_hi)
         box = (x, y, x + sw, y + sh)
         padded = (x - 6, y - 6, x + sw + 6, y + sh + 6)
 
@@ -248,7 +264,8 @@ def add_label_near_structure(
     w, h = page.size
     label = random_label()
     font_size = random.randint(*cfg.label_font_range)
-    font = load_font(font_paths, font_size)
+    use_bold = random.random() < 0.5
+    font = load_font(font_paths, font_size, prefer_bold=use_bold)
 
     x0, y0, x1, y1 = struct_box
 
@@ -337,9 +354,14 @@ def add_prose_block(
     existing.append(box)
 
     draw = ImageDraw.Draw(page)
-    for i in range(n_lines):
-        words = [random.choice(PROSE_WORDS) for _ in range(random.randint(6, 12))]
-        draw.text((x0, y0 + i * line_h), " ".join(words), font=font, fill=(0, 0, 0))
+    total_words = n_lines * random.randint(6, 10)
+    words = [random.choice(PROSE_WORDS) for _ in range(total_words)]
+    paragraph = " ".join(words).capitalize() + "."
+    avg_char_w = font_size * 0.55
+    chars_per_line = max(20, int(block_w / avg_char_w))
+    lines = textwrap.wrap(paragraph, width=chars_per_line)[:n_lines]
+    for i, line in enumerate(lines):
+        draw.text((x0, y0 + i * line_h), line, font=font, fill=(0, 0, 0))
 
 
 def add_caption(
@@ -891,9 +913,14 @@ def add_multiline_text_block(
         "dose", "response", "curve", "receptor", "antagonist",
         "pharmacokinetic", "bioavailability", "clearance", "metabolite",
     ]
-    for i in range(n_lines):
-        words = [random.choice(extended) for _ in range(random.randint(4, 10))]
-        draw.text((x0, y0 + i * line_h), " ".join(words), font=font, fill=(0, 0, 0))
+    total_words = n_lines * random.randint(4, 8)
+    words = [random.choice(extended) for _ in range(total_words)]
+    paragraph = " ".join(words).capitalize() + "."
+    avg_char_w = font_size * 0.55
+    chars_per_line = max(20, int(block_w / avg_char_w))
+    lines = textwrap.wrap(paragraph, width=chars_per_line)[:n_lines]
+    for i, line in enumerate(lines):
+        draw.text((x0, y0 + i * line_h), line, font=font, fill=(0, 0, 0))
 
 
 def apply_noise(img: Image.Image, cfg: PageConfig) -> Image.Image:
@@ -964,20 +991,45 @@ def make_page(
     n_structures = random.randint(cfg.min_structures, cfg.max_structures)
     random.shuffle(smiles_pool)
 
+    # Two-column layout: split page vertically, alternate structures left/right
+    two_column = random.random() < cfg.two_column_prob and n_structures >= 2
+    if two_column:
+        col_gap = 60
+        mid = cfg.page_w // 2
+        col_x_ranges = [
+            (cfg.margin, mid - col_gap // 2),
+            (mid + col_gap // 2, cfg.page_w - cfg.margin),
+        ]
+        col_y_range = (cfg.margin, cfg.page_h - cfg.margin)
+    else:
+        col_x_ranges = None
+        col_y_range = None
+
     for smi in smiles_pool[: n_structures * 2]:
         size = random.randint(*cfg.struct_size_range)
         struct_img = render_structure(smi, size, cfg)
         if struct_img is None:
             continue
 
-        box = place_structure(page, struct_img, cfg, existing_boxes)
+        if two_column:
+            assert col_x_ranges is not None
+            col = len(struct_boxes) % 2
+            box = place_structure(
+                page, struct_img, cfg, existing_boxes,
+                x_range=col_x_ranges[col], y_range=col_y_range,
+            )
+        else:
+            box = place_structure(page, struct_img, cfg, existing_boxes)
         if box is None:
             continue
 
         struct_boxes.append(box)
         existing_boxes.append(box)
-        label_box = add_label_near_structure(page, box, cfg, font_paths)
-        existing_boxes.append(label_box)
+
+        # ~10% of structures have no label (e.g. scaffold in a series)
+        if random.random() > 0.10:
+            label_box = add_label_near_structure(page, box, cfg, font_paths)
+            existing_boxes.append(label_box)
 
         if len(struct_boxes) >= n_structures:
             break
