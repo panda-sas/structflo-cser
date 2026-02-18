@@ -1,0 +1,19 @@
+[project]
+name = "struct-labels"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "chembl-webresource-client>=0.10.9",
+    "decimer>=2.8.0",
+    "matplotlib>=3.10.8",
+    "numpy>=2.4.2",
+    "opencv-python-headless>=4.13.0.92",
+    "paddleocr>=3.4.0",
+    "pillow>=12.1.1",
+    "rdkit>=2025.9.5",
+    "scipy>=1.17.0",
+    "tqdm>=4.67.3",
+    "ultralytics>=8.4.14",
+]
