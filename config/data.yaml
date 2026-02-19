@@ -1,0 +1,7 @@
+path: /home/sidx/workspace/struct_labels/data/generated
+train: train/images
+val: val/images
+
+nc: 1
+names:
+  0: compound_panel
