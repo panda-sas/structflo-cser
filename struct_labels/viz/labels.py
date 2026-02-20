@@ -1,15 +1,4 @@
-#!/usr/bin/env python3
-"""
-Visualize YOLO bounding box labels overlaid on synthetic page images.
-
-Reads images + corresponding .txt label files, draws boxes, saves to an
-output directory for quick human verification.
-
-Usage:
-    python scripts/visualize_labels.py
-    python scripts/visualize_labels.py --split val --n 50 --out data/viz
-    python scripts/visualize_labels.py --split train --n 20 --out data/viz
-"""
+"""Visualise YOLO bounding box labels overlaid on synthetic page images."""
 
 import argparse
 import random
@@ -17,9 +6,8 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 
-
-BOX_WIDTH = 6                 # Pixels — thick enough to see on 2480×3508
-LABEL_COLOR = (255, 255, 255) # White text on label tag
+BOX_WIDTH = 6                  # Pixels — thick enough to see on 2480×3508
+LABEL_COLOR = (255, 255, 255)  # White text on label tag
 CLASS_COLORS = {
     0: (0, 200, 0),    # Green — chemical_structure
     1: (0, 100, 255),  # Blue  — compound_label
@@ -65,7 +53,6 @@ def draw_boxes(img: Image.Image, boxes: list[dict], font: ImageFont.ImageFont) -
 
         draw.rectangle([x1, y1, x2, y2], outline=color, width=BOX_WIDTH)
 
-        # Small index tag at top-left corner of the box
         tag = str(i)
         tb = draw.textbbox((0, 0), tag, font=font)
         tw, th = tb[2] - tb[0] + 6, tb[3] - tb[1] + 4
@@ -90,7 +77,6 @@ def visualize_split(
         print(f"Image directory not found: {img_dir}")
         return
 
-    # Collect all image paths that have a matching label file
     img_paths = sorted(
         p for p in img_dir.iterdir()
         if p.suffix.lower() in {".jpg", ".jpeg", ".png"}
@@ -113,7 +99,6 @@ def visualize_split(
     ok = skipped = 0
     for img_path in sample:
         lbl_path = lbl_dir / img_path.with_suffix(".txt").name
-
         try:
             img = Image.open(img_path).convert("RGB")
         except Exception as e:

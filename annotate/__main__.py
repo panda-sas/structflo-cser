@@ -9,13 +9,9 @@ Usage (from project root):
 """
 
 import argparse
-import sys
 from pathlib import Path
 
-# Allow both `python annotate/__main__.py` and `python -m annotate`
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
-from annotate.server import app, set_config   # noqa: E402
+from annotate.server import app, set_config
 
 
 def main() -> None:

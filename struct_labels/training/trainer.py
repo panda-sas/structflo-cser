@@ -1,24 +1,14 @@
-#!/usr/bin/env python3
-"""
-Fine-tune YOLO11l for compound panel detection.
-
-Detection target: union bbox of chemical structure + label ID (1 class).
-Hardware: NVIDIA A6000 Ada (48 GB VRAM)
-
-Usage:
-    python scripts/03_train.py                        # defaults
-    python scripts/03_train.py --weights yolo11m.pt   # lighter model
-    python scripts/03_train.py --resume runs/...      # resume from checkpoint
-"""
+"""YOLO11l training wrapper."""
 
 import argparse
 from pathlib import Path
 
 from ultralytics import YOLO
 
-ROOT = Path(__file__).parent.parent
-DATA_YAML = ROOT / "config" / "data.yaml"
-RUNS_DIR = ROOT / "runs" / "labels_detect"
+# Paths are resolved relative to this file's location in the installed package
+_PROJECT_ROOT = Path(__file__).parents[2]
+DATA_YAML = _PROJECT_ROOT / "config" / "data.yaml"
+RUNS_DIR = _PROJECT_ROOT / "runs" / "labels_detect"
 
 
 def train(
@@ -51,7 +41,7 @@ def train(
         hsv_v=0.1,        # slight brightness jitter still useful
         degrees=3.0,      # slight rotation (scanned page tilt)
         translate=0.1,
-        scale=0.3,        # important: bridges train (1280) vs inference (1536 tile) scale gap
+        scale=0.3,        # bridges train (1280) vs inference (1536 tile) scale gap
         shear=1.0,
         flipud=0.0,       # never: documents don't appear upside down
         fliplr=0.0,       # never: chemical handedness matters
@@ -59,7 +49,7 @@ def train(
         mixup=0.0,
         copy_paste=0.0,
 
-        cache="disk",     # preprocess once, reuse across epochs (~2000 large JPEGs)
+        cache="disk",     # preprocess once, reuse across epochs
         workers=8,
 
         project=str(RUNS_DIR),
@@ -72,11 +62,10 @@ def train(
         resume=bool(resume),
     )
 
-    # Final val metrics on best weights
     best = RUNS_DIR / "yolo11l_panels" / "weights" / "best.pt"
     if best.exists():
         m = YOLO(str(best)).val(data=str(DATA_YAML))
-        print(f"\n--- Best model metrics ---")
+        print("\n--- Best model metrics ---")
         print(f"mAP50:     {m.box.map50:.4f}   (target > 0.95)")
         print(f"mAP50-95:  {m.box.map:.4f}")
         print(f"Precision: {m.box.mp:.4f}")
@@ -85,17 +74,16 @@ def train(
 
 
 def main() -> None:
-    p = argparse.ArgumentParser()
+    p = argparse.ArgumentParser(description="Train YOLO11l compound panel detector")
     p.add_argument("--weights", default="yolo11l.pt",
                    help="Pretrained weights (default: yolo11l.pt)")
     p.add_argument("--imgsz", type=int, default=1280,
-                   help="Training image size. 1280 is fine — compound panels are 200-350px "
-                        "at this scale, well above detection threshold.")
+                   help="Training image size")
     p.add_argument("--batch", type=int, default=8,
-                   help="Batch size. 8 is safe for A6000 48GB at imgsz=1280.")
+                   help="Batch size (8 is safe for A6000 48GB at imgsz=1280)")
     p.add_argument("--epochs", type=int, default=50)
     p.add_argument("--resume", default=None,
-                   help="Path to last.pt to resume an interrupted run.")
+                   help="Path to last.pt to resume an interrupted run")
     args = p.parse_args()
 
     if args.imgsz > 1280 and args.batch > 8:
