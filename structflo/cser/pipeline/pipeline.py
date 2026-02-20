@@ -14,7 +14,10 @@ from structflo.cser.inference.detector import DEFAULT_WEIGHTS, detect_full, dete
 from structflo.cser.pipeline.matcher import BaseMatcher, HungarianMatcher
 from structflo.cser.pipeline.models import BBox, CompoundPair, Detection
 from structflo.cser.pipeline.ocr import BaseOCR, EasyOCRExtractor
-from structflo.cser.pipeline.smiles_extractor import BaseSmilesExtractor, DecimerExtractor
+from structflo.cser.pipeline.smiles_extractor import (
+    BaseSmilesExtractor,
+    DecimerExtractor,
+)
 
 # Anything the pipeline accepts as an image input
 ImageLike = Union[Path, str, np.ndarray, Image.Image]
@@ -114,7 +117,9 @@ class ChemPipeline:
         img_pil = _to_pil(image)
         img_np = np.array(img_pil)
         if self.tile:
-            raw = detect_tiled(self._model, img_np, tile_size=self.tile_size, conf=self.conf)
+            raw = detect_tiled(
+                self._model, img_np, tile_size=self.tile_size, conf=self.conf
+            )
         else:
             raw = detect_full(self._model, img_np, conf=self.conf)
         return [Detection.from_dict(d) for d in raw]

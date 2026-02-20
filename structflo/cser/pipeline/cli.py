@@ -31,7 +31,10 @@ from structflo.cser.inference.detector import DEFAULT_WEIGHTS
 from structflo.cser.pipeline.matcher import HungarianMatcher
 from structflo.cser.pipeline.ocr import EasyOCRExtractor, NullOCR
 from structflo.cser.pipeline.pipeline import ChemPipeline
-from structflo.cser.pipeline.smiles_extractor import DecimerExtractor, NullSmilesExtractor
+from structflo.cser.pipeline.smiles_extractor import (
+    DecimerExtractor,
+    NullSmilesExtractor,
+)
 
 
 def main() -> None:
@@ -44,8 +47,12 @@ def main() -> None:
     p.add_argument(
         "--weights", default=str(DEFAULT_WEIGHTS), help="YOLO weights .pt file"
     )
-    p.add_argument("--conf", type=float, default=0.3, help="Detection confidence threshold")
-    p.add_argument("--no_tile", action="store_true", help="Run on full image (no tiling)")
+    p.add_argument(
+        "--conf", type=float, default=0.3, help="Detection confidence threshold"
+    )
+    p.add_argument(
+        "--no_tile", action="store_true", help="Run on full image (no tiling)"
+    )
     p.add_argument("--tile_size", type=int, default=1536, help="Tile size in pixels")
     p.add_argument(
         "--max_dist",

@@ -58,11 +58,7 @@ def add_random_image(
     Uses real images from *distractor_pool* when available (85% of the time),
     falling back to synthetic chart/shape generators.
     """
-    use_real = (
-        distractor_pool
-        and len(distractor_pool) > 0
-        and random.random() < 0.85
-    )
+    use_real = distractor_pool and len(distractor_pool) > 0 and random.random() < 0.85
     if use_real:
         rand_img = _pick_distractor_image(distractor_pool)
     else:

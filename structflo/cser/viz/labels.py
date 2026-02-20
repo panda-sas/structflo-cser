@@ -6,10 +6,10 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 
-BOX_WIDTH = 6                  # Pixels — thick enough to see on 2480×3508
+BOX_WIDTH = 6  # Pixels — thick enough to see on 2480×3508
 LABEL_COLOR = (255, 255, 255)  # White text on label tag
 CLASS_COLORS = {
-    0: (0, 200, 0),    # Green — chemical_structure
+    0: (0, 200, 0),  # Green — chemical_structure
     1: (0, 100, 255),  # Blue  — compound_label
 }
 
@@ -38,11 +38,15 @@ def parse_yolo_labels(label_path: Path, img_w: int, img_h: int) -> list[dict]:
         y1 = int((cy - bh / 2) * img_h)
         x2 = int((cx + bw / 2) * img_w)
         y2 = int((cy + bh / 2) * img_h)
-        boxes.append({"x1": x1, "y1": y1, "x2": x2, "y2": y2, "class_id": int(class_id)})
+        boxes.append(
+            {"x1": x1, "y1": y1, "x2": x2, "y2": y2, "class_id": int(class_id)}
+        )
     return boxes
 
 
-def draw_boxes(img: Image.Image, boxes: list[dict], font: ImageFont.ImageFont) -> Image.Image:
+def draw_boxes(
+    img: Image.Image, boxes: list[dict], font: ImageFont.ImageFont
+) -> Image.Image:
     out = img.copy()
     draw = ImageDraw.Draw(out)
 
@@ -78,7 +82,8 @@ def visualize_split(
         return
 
     img_paths = sorted(
-        p for p in img_dir.iterdir()
+        p
+        for p in img_dir.iterdir()
         if p.suffix.lower() in {".jpg", ".jpeg", ".png"}
         and (lbl_dir / p.with_suffix(".txt").name).exists()
     )
@@ -117,15 +122,33 @@ def visualize_split(
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Visualize YOLO labels on synthetic pages")
-    parser.add_argument("--data", type=Path, default=Path("data/generated"),
-                        help="Root of the generated dataset (default: data/generated)")
-    parser.add_argument("--split", choices=["train", "val", "both"], default="both",
-                        help="Which split(s) to visualize (default: both)")
-    parser.add_argument("--n", type=int, default=30,
-                        help="Number of images to sample per split (default: 30)")
-    parser.add_argument("--out", type=Path, default=Path("data/viz"),
-                        help="Output directory (default: data/viz)")
+    parser = argparse.ArgumentParser(
+        description="Visualize YOLO labels on synthetic pages"
+    )
+    parser.add_argument(
+        "--data",
+        type=Path,
+        default=Path("data/generated"),
+        help="Root of the generated dataset (default: data/generated)",
+    )
+    parser.add_argument(
+        "--split",
+        choices=["train", "val", "both"],
+        default="both",
+        help="Which split(s) to visualize (default: both)",
+    )
+    parser.add_argument(
+        "--n",
+        type=int,
+        default=30,
+        help="Number of images to sample per split (default: 30)",
+    )
+    parser.add_argument(
+        "--out",
+        type=Path,
+        default=Path("data/viz"),
+        help="Output directory (default: data/viz)",
+    )
     parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
 

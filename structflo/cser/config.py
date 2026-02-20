@@ -27,7 +27,7 @@ class PageConfig:
     min_structures: int = 1
     max_structures: int = 10
     two_column_prob: float = 0.25
-    grid_layout_prob: float = 0.20   # 20% chance of uniform grid layout
+    grid_layout_prob: float = 0.20  # 20% chance of uniform grid layout
     grid_jitter: float = 0.12
 
     # Distractors
@@ -79,7 +79,7 @@ def make_page_config_slide(dpi: int = 96) -> PageConfig:
         label_font_range=(max(8, int(10 * s)), max(12, int(26 * s))),
         label_offset_range=(max(3, int(8 * s)), max(6, int(14 * s))),
         min_structures=1,
-        max_structures=6,        # slides pack fewer compounds
+        max_structures=6,  # slides pack fewer compounds
         two_column_prob=0.20,
-        grid_layout_prob=0.35,   # grids are common in slide figures
+        grid_layout_prob=0.35,  # grids are common in slide figures
     )

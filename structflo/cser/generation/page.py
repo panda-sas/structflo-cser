@@ -132,9 +132,14 @@ def make_page(
         cell_w = usable_w // cols
         cell_h = usable_h // rows
         grid_positions = [
-            (cfg.margin + c * cell_w, cfg.margin + r * cell_h,
-             cfg.margin + (c + 1) * cell_w, cfg.margin + (r + 1) * cell_h)
-            for r in range(rows) for c in range(cols)
+            (
+                cfg.margin + c * cell_w,
+                cfg.margin + r * cell_h,
+                cfg.margin + (c + 1) * cell_w,
+                cfg.margin + (r + 1) * cell_h,
+            )
+            for r in range(rows)
+            for c in range(cols)
         ]
         col_x_ranges = None
         col_y_range = None
@@ -162,16 +167,24 @@ def make_page(
         if use_grid and grid_positions and grid_idx < len(grid_positions):
             gx0, gy0, gx1, gy1 = grid_positions[grid_idx]
             box = place_structure(
-                page, struct_img, cfg, existing_boxes,
-                x_range=(gx0, gx1), y_range=(gy0, gy1),
+                page,
+                struct_img,
+                cfg,
+                existing_boxes,
+                x_range=(gx0, gx1),
+                y_range=(gy0, gy1),
             )
             grid_idx += 1
         elif two_column:
             assert col_x_ranges is not None
             col = len(panels) % 2
             box = place_structure(
-                page, struct_img, cfg, existing_boxes,
-                x_range=col_x_ranges[col], y_range=col_y_range,
+                page,
+                struct_img,
+                cfg,
+                existing_boxes,
+                x_range=col_x_ranges[col],
+                y_range=col_y_range,
             )
         else:
             box = place_structure(page, struct_img, cfg, existing_boxes)
@@ -187,12 +200,14 @@ def make_page(
             label_box, label_text = add_label_near_structure(page, box, cfg, font_paths)
             existing_boxes.append(label_box)
 
-        panels.append({
-            "struct_box": box,
-            "label_box": label_box,
-            "label_text": label_text,
-            "smiles": smi,
-        })
+        panels.append(
+            {
+                "struct_box": box,
+                "label_box": label_box,
+                "label_text": label_text,
+                "smiles": smi,
+            }
+        )
 
         if len(panels) >= n_structures:
             break

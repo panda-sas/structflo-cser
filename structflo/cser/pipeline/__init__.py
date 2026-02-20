@@ -23,7 +23,11 @@ from structflo.cser.pipeline.matcher import BaseMatcher, HungarianMatcher
 from structflo.cser.pipeline.models import BBox, CompoundPair, Detection
 from structflo.cser.pipeline.ocr import BaseOCR, EasyOCRExtractor, NullOCR
 from structflo.cser.pipeline.pipeline import ChemPipeline
-from structflo.cser.pipeline.smiles_extractor import BaseSmilesExtractor, DecimerExtractor, NullSmilesExtractor
+from structflo.cser.pipeline.smiles_extractor import (
+    BaseSmilesExtractor,
+    DecimerExtractor,
+    NullSmilesExtractor,
+)
 
 __all__ = [
     # Pipeline

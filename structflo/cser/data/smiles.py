@@ -77,12 +77,14 @@ def fetch_smiles_from_chembl_sqlite(
         if canonical in seen:
             continue
         seen.add(canonical)
-        collected.append({
-            "chembl_id": chembl_id,
-            "smiles": canonical,
-            "num_atoms": mol.GetNumHeavyAtoms(),
-            "mw": round(mw, 2) if mw else None,
-        })
+        collected.append(
+            {
+                "chembl_id": chembl_id,
+                "smiles": canonical,
+                "num_atoms": mol.GetNumHeavyAtoms(),
+                "mw": round(mw, 2) if mw else None,
+            }
+        )
 
     output_dir = Path(output_path).parent
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -110,16 +112,27 @@ Example:
   sl-fetch-smiles --db chembl_35/chembl_35_sqlite/chembl_35.db
         """,
     )
-    parser.add_argument("--db", type=str, default="chembl_34.db",
-                        help="Path to ChEMBL SQLite database file")
-    parser.add_argument("--output", type=str, default="data/smiles/chembl_smiles.csv",
-                        help="Output CSV file path")
-    parser.add_argument("--n", type=int, default=20000,
-                        help="Number of SMILES to fetch")
-    parser.add_argument("--min-mw", type=float, default=150.0,
-                        help="Minimum molecular weight")
-    parser.add_argument("--max-mw", type=float, default=900.0,
-                        help="Maximum molecular weight")
+    parser.add_argument(
+        "--db",
+        type=str,
+        default="chembl_34.db",
+        help="Path to ChEMBL SQLite database file",
+    )
+    parser.add_argument(
+        "--output",
+        type=str,
+        default="data/smiles/chembl_smiles.csv",
+        help="Output CSV file path",
+    )
+    parser.add_argument(
+        "--n", type=int, default=20000, help="Number of SMILES to fetch"
+    )
+    parser.add_argument(
+        "--min-mw", type=float, default=150.0, help="Minimum molecular weight"
+    )
+    parser.add_argument(
+        "--max-mw", type=float, default=900.0, help="Maximum molecular weight"
+    )
     args = parser.parse_args()
 
     if not Path(args.db).exists():

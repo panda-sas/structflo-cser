@@ -12,8 +12,14 @@ def _gen_geometric_shapes(width: int, height: int) -> Image.Image:
     draw = ImageDraw.Draw(img)
     n_shapes = random.randint(3, 10)
     colors = [
-        (66, 133, 244), (219, 68, 55), (244, 180, 0), (15, 157, 88),
-        (171, 71, 188), (0, 172, 193), (200, 200, 200), (100, 100, 100),
+        (66, 133, 244),
+        (219, 68, 55),
+        (244, 180, 0),
+        (15, 157, 88),
+        (171, 71, 188),
+        (0, 172, 193),
+        (200, 200, 200),
+        (100, 100, 100),
     ]
     for _ in range(n_shapes):
         shape = random.choice(["rect", "ellipse", "line", "triangle"])
@@ -40,7 +46,9 @@ def _gen_geometric_shapes(width: int, height: int) -> Image.Image:
             ly1 = random.randint(0, height)
             draw.line([lx0, ly0, lx1, ly1], fill=color, width=random.randint(1, 3))
         elif shape == "triangle":
-            pts = [(random.randint(0, width), random.randint(0, height)) for _ in range(3)]
+            pts = [
+                (random.randint(0, width), random.randint(0, height)) for _ in range(3)
+            ]
             draw.polygon(pts, fill=color)
     return img
 

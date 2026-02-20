@@ -83,14 +83,21 @@ def main() -> int:
     parser = argparse.ArgumentParser(
         description="Download distractor images for synthetic page generation"
     )
-    parser.add_argument("--out", type=Path, default=Path("data/distractors"),
-                        help="Output directory for downloaded images")
-    parser.add_argument("--count", type=int, default=300,
-                        help="Number of images to download")
-    parser.add_argument("--seed", type=int, default=42,
-                        help="Random seed for reproducible selection")
-    parser.add_argument("--workers", type=int, default=8,
-                        help="Number of parallel download threads")
+    parser.add_argument(
+        "--out",
+        type=Path,
+        default=Path("data/distractors"),
+        help="Output directory for downloaded images",
+    )
+    parser.add_argument(
+        "--count", type=int, default=300, help="Number of images to download"
+    )
+    parser.add_argument(
+        "--seed", type=int, default=42, help="Random seed for reproducible selection"
+    )
+    parser.add_argument(
+        "--workers", type=int, default=8, help="Number of parallel download threads"
+    )
     args = parser.parse_args()
 
     out_dir: Path = args.out
@@ -113,9 +120,18 @@ def main() -> int:
 
     rng = random.Random(args.seed)
     sizes = [
-        (300, 200), (400, 300), (350, 250), (250, 180),
-        (500, 350), (200, 300), (280, 280), (450, 200),
-        (320, 240), (380, 260), (220, 330), (480, 320),
+        (300, 200),
+        (400, 300),
+        (350, 250),
+        (250, 180),
+        (500, 350),
+        (200, 300),
+        (280, 280),
+        (450, 200),
+        (320, 240),
+        (380, 260),
+        (220, 330),
+        (480, 320),
     ]
 
     tasks: list = []

@@ -21,7 +21,7 @@ def pair_detections(
     If max_distance is set, pairs beyond that pixel distance are also dropped.
     """
     structures = [d for d in detections if d["class_id"] == 0]
-    labels     = [d for d in detections if d["class_id"] == 1]
+    labels = [d for d in detections if d["class_id"] == 1]
 
     if not structures or not labels:
         return []
@@ -39,9 +39,11 @@ def pair_detections(
     for r, c in zip(row_ind, col_ind):
         dist = cost[r, c]
         if max_distance is None or dist <= max_distance:
-            pairs.append({
-                "structure": structures[r],
-                "label":     labels[c],
-                "distance":  dist,
-            })
+            pairs.append(
+                {
+                    "structure": structures[r],
+                    "label": labels[c],
+                    "distance": dist,
+                }
+            )
     return pairs

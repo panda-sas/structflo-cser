@@ -38,7 +38,9 @@ def _rand_mw() -> str:
 
 
 def _rand_activity() -> str:
-    return random.choice(["Active", "Inactive", "Partial", "++", "+", "-", ">90%", "<10%"])
+    return random.choice(
+        ["Active", "Inactive", "Partial", "++", "+", "-", ">90%", "<10%"]
+    )
 
 
 def _rand_percent() -> str:
@@ -50,45 +52,69 @@ def _rand_solubility() -> str:
 
 
 def _rand_project() -> str:
-    return random.choice(["PRJ", "PROJ", "SER", "HIT", "LEAD"]) + f"-{random.randint(100, 9999)}"
+    return (
+        random.choice(["PRJ", "PROJ", "SER", "HIT", "LEAD"])
+        + f"-{random.randint(100, 9999)}"
+    )
 
 
 _COLUMN_GENERATORS: Dict[str, Callable[[], str]] = {
-    "IC50 (nM)":    _rand_bioactivity,
-    "EC50 (nM)":    _rand_bioactivity,
-    "Ki (nM)":      _rand_bioactivity,
-    "pIC50":        _rand_pic50,
-    "LogP":         _rand_logp,
-    "cLogD":        _rand_logp,
-    "MW (Da)":      _rand_mw,
-    "Activity":     _rand_activity,
-    "Inhibition":   _rand_percent,
-    "Solubility":   _rand_solubility,
-    "Project":      _rand_project,
-    "Purity (%)":   _rand_percent,
-    "Yield (%)":    _rand_percent,
-    "Batch":        lambda: f"BT-{random.randint(1000, 9999)}",
-    "Selectivity":  lambda: f"{random.uniform(1, 1000):.0f}x",
+    "IC50 (nM)": _rand_bioactivity,
+    "EC50 (nM)": _rand_bioactivity,
+    "Ki (nM)": _rand_bioactivity,
+    "pIC50": _rand_pic50,
+    "LogP": _rand_logp,
+    "cLogD": _rand_logp,
+    "MW (Da)": _rand_mw,
+    "Activity": _rand_activity,
+    "Inhibition": _rand_percent,
+    "Solubility": _rand_solubility,
+    "Project": _rand_project,
+    "Purity (%)": _rand_percent,
+    "Yield (%)": _rand_percent,
+    "Batch": lambda: f"BT-{random.randint(1000, 9999)}",
+    "Selectivity": lambda: f"{random.uniform(1, 1000):.0f}x",
 }
 
 _EXCEL_TITLES = [
-    "Compound Library Results", "SAR Summary Table", "Screening Data",
-    "HTS Results", "Compound Activity Table", "Lead Optimisation Data",
-    "Assay Results", "Compound Profiling", "Dose-Response Summary",
-    "In Vitro ADME Data", "Fragment Screening Hits",
+    "Compound Library Results",
+    "SAR Summary Table",
+    "Screening Data",
+    "HTS Results",
+    "Compound Activity Table",
+    "Lead Optimisation Data",
+    "Assay Results",
+    "Compound Profiling",
+    "Dose-Response Summary",
+    "In Vitro ADME Data",
+    "Fragment Screening Hits",
 ]
 
 _GRID_TITLES = [
-    "Compound Library", "SAR Grid", "Lead Series", "HTS Hits",
-    "Analogue Set", "Scaffold Exploration", "Fragment Library",
-    "Building Blocks", "Active Compounds", "Screening Panel",
-    "Diversity Set", "Core Analogues",
+    "Compound Library",
+    "SAR Grid",
+    "Lead Series",
+    "HTS Hits",
+    "Analogue Set",
+    "Scaffold Exploration",
+    "Fragment Library",
+    "Building Blocks",
+    "Active Compounds",
+    "Screening Panel",
+    "Diversity Set",
+    "Core Analogues",
 ]
 
 _HEADER_COLORS = [
-    (70, 130, 180), (100, 149, 237), (60, 100, 160),
-    (80, 80, 80), (130, 100, 60), (60, 120, 60), (100, 60, 120),
-    (40, 100, 120), (120, 40, 60),
+    (70, 130, 180),
+    (100, 149, 237),
+    (60, 100, 160),
+    (80, 80, 80),
+    (130, 100, 60),
+    (60, 120, 60),
+    (100, 60, 120),
+    (40, 100, 120),
+    (120, 40, 60),
 ]
 
 
@@ -156,8 +182,9 @@ def make_excel_page(
     n_data_cols = random.randint(2, max(2, min(5, avail_for_data // min_data_w)))
     data_col_w = max(min_data_w, avail_for_data // max(1, n_data_cols))
 
-    col_names = random.sample(list(_COLUMN_GENERATORS.keys()),
-                              min(n_data_cols, len(_COLUMN_GENERATORS)))
+    col_names = random.sample(
+        list(_COLUMN_GENERATORS.keys()), min(n_data_cols, len(_COLUMN_GENERATORS))
+    )
     col_fns = [_COLUMN_GENERATORS[n] for n in col_names]
 
     label_on_right = random.random() < 0.5
@@ -166,8 +193,10 @@ def make_excel_page(
         col_xs = [
             table_x0,
             table_x0 + struct_col_w,
-            *[table_x0 + struct_col_w + label_col_w + i * data_col_w
-              for i in range(n_data_cols)],
+            *[
+                table_x0 + struct_col_w + label_col_w + i * data_col_w
+                for i in range(n_data_cols)
+            ],
         ]
         col_ws = [struct_col_w, label_col_w] + [data_col_w] * n_data_cols
         headers = ["Structure", "Compound ID"] + col_names
@@ -176,8 +205,10 @@ def make_excel_page(
         col_xs = [
             table_x0,
             table_x0 + label_col_w,
-            *[table_x0 + label_col_w + struct_col_w + i * data_col_w
-              for i in range(n_data_cols)],
+            *[
+                table_x0 + label_col_w + struct_col_w + i * data_col_w
+                for i in range(n_data_cols)
+            ],
         ]
         col_ws = [label_col_w, struct_col_w] + [data_col_w] * n_data_cols
         headers = ["Compound ID", "Structure"] + col_names
@@ -237,19 +268,26 @@ def make_excel_page(
             vw, vh = _text_size(draw, val, cell_font)
             draw.text(
                 (dx + max(cell_pad, (dw - vw) // 2), y + max(2, (row_h - vh) // 2)),
-                val, font=cell_font, fill=(30, 30, 30),
+                val,
+                font=cell_font,
+                fill=(30, 30, 30),
             )
 
         # Row separator
-        draw.line([(table_x0, y + row_h), (table_x1, y + row_h)],
-                  fill=(200, 200, 200), width=1)
+        draw.line(
+            [(table_x0, y + row_h), (table_x1, y + row_h)],
+            fill=(200, 200, 200),
+            width=1,
+        )
 
-        panels.append({
-            "struct_box": struct_box,
-            "label_box":  label_box,
-            "label_text": label,
-            "smiles":     smi,
-        })
+        panels.append(
+            {
+                "struct_box": struct_box,
+                "label_box": label_box,
+                "label_text": label,
+                "smiles": smi,
+            }
+        )
         y += row_h
         row_idx += 1
 
@@ -258,13 +296,14 @@ def make_excel_page(
     for cx in col_xs:
         draw.line([(cx, table_y0), (cx, table_bottom)], fill=(180, 180, 180), width=1)
     draw.line(
-        [(col_xs[-1] + col_ws[-1], table_y0),
-         (col_xs[-1] + col_ws[-1], table_bottom)],
-        fill=(180, 180, 180), width=1,
+        [(col_xs[-1] + col_ws[-1], table_y0), (col_xs[-1] + col_ws[-1], table_bottom)],
+        fill=(180, 180, 180),
+        width=1,
     )
     # Outer border
-    draw.rectangle([table_x0, table_y0, table_x1, table_bottom],
-                   outline=(120, 120, 120), width=2)
+    draw.rectangle(
+        [table_x0, table_y0, table_x1, table_bottom], outline=(120, 120, 120), width=2
+    )
 
     return page, panels
 
@@ -314,8 +353,9 @@ def make_grid_page(
 
     # Optional extra data rows beneath the label
     n_extra = random.randint(0, 3)
-    extra_names = random.sample(list(_COLUMN_GENERATORS.keys()),
-                                min(n_extra, len(_COLUMN_GENERATORS)))
+    extra_names = random.sample(
+        list(_COLUMN_GENERATORS.keys()), min(n_extra, len(_COLUMN_GENERATORS))
+    )
     extra_fns = [_COLUMN_GENERATORS[n] for n in extra_names]
 
     lbl_sz = max(8, int(struct_size * 0.09))
@@ -378,7 +418,9 @@ def make_grid_page(
             else:
                 label_cy = sy + sh + struct_pad + label_h // 2
 
-            label_box = draw_rotated_text(page, label, (label_cx, label_cy), lbl_font, 0.0)
+            label_box = draw_rotated_text(
+                page, label, (label_cx, label_cy), lbl_font, 0.0
+            )
 
             # Extra property rows
             for di, (dname, dfn) in enumerate(zip(extra_names, extra_fns)):
@@ -391,11 +433,13 @@ def make_grid_page(
                 dx = cell_x + max(4, (cell_w - dw) // 2)
                 draw.text((dx, dy), val_str, font=data_font, fill=(80, 80, 80))
 
-            panels.append({
-                "struct_box": struct_box,
-                "label_box":  label_box,
-                "label_text": label,
-                "smiles":     smi,
-            })
+            panels.append(
+                {
+                    "struct_box": struct_box,
+                    "label_box": label_box,
+                    "label_text": label,
+                    "smiles": smi,
+                }
+            )
 
     return page, panels

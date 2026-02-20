@@ -8,12 +8,13 @@ from typing import List, Optional, Tuple
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
-from structflo.cser._geometry import boxes_intersect
 from structflo.cser.config import PageConfig
 
 
 def _rand_prefix(min_len: int = 3, max_len: int = 6) -> str:
-    return "".join(random.choices(string.ascii_uppercase, k=random.randint(min_len, max_len)))
+    return "".join(
+        random.choices(string.ascii_uppercase, k=random.randint(min_len, max_len))
+    )
 
 
 LABEL_STYLES = {
@@ -23,16 +24,13 @@ LABEL_STYLES = {
         + str(random.randint(100, 9_999_999))
     ),
     # SACC-33000, MERK-5512 — 3-5 uppercase letters + dash + digits
-    "dash_long": lambda: (
-        _rand_prefix(3, 5) + "-" + str(random.randint(100, 999_999))
-    ),
+    "dash_long": lambda: _rand_prefix(3, 5) + "-" + str(random.randint(100, 999_999)),
     # LGNIA55, BXTR2204 — 4-6 uppercase letters directly followed by digits (no dash)
-    "prefix_nodash": lambda: (
-        _rand_prefix(4, 6) + str(random.randint(10, 99999))
-    ),
+    "prefix_nodash": lambda: _rand_prefix(4, 6) + str(random.randint(10, 99999)),
     # MERK-22.4.5.6 — prefix + dash + dotted hierarchical number
     "dotted_hierarchy": lambda: (
-        _rand_prefix(3, 5) + "-"
+        _rand_prefix(3, 5)
+        + "-"
         + ".".join(str(random.randint(1, 99)) for _ in range(random.randint(2, 4)))
     ),
     # CAS: 50-78-2, 1234-56-7
@@ -42,7 +40,8 @@ LABEL_STYLES = {
     # Internal catalog: CPD-00123, HIT-04567
     "catalog": lambda: (
         random.choice(["CPD", "MOL", "HIT", "REF", "STD", "LIB", "SCR", "CMP", "SYN"])
-        + "-" + str(random.randint(1, 99999)).zfill(5)
+        + "-"
+        + str(random.randint(1, 99999)).zfill(5)
     ),
 }
 
@@ -51,7 +50,9 @@ def random_label() -> str:
     return random.choice(list(LABEL_STYLES.values()))()
 
 
-def load_font(font_paths: List[Path], size: int, prefer_bold: bool = False) -> ImageFont.ImageFont:
+def load_font(
+    font_paths: List[Path], size: int, prefer_bold: bool = False
+) -> ImageFont.ImageFont:
     """Pick a random font from *font_paths* at the given pixel *size*.
 
     If *prefer_bold* is True, only bold-named fonts are considered (if any).
@@ -63,6 +64,7 @@ def load_font(font_paths: List[Path], size: int, prefer_bold: bool = False) -> I
         #   *-Bold.ttf, *-Bd*.ttf, *-B.ttf (Ubuntu), *-Demi*.otf (URW),
         #   *-Heavy*, *-Black*, *-SemiBold*, *-ExtraBold*
         import re as _re
+
         _BOLD_PAT = _re.compile(
             r"(bold|[-_]bd[-_]?|[-_]b\.ttf|demi|heavy|black|semibold|extrabold)",
             _re.IGNORECASE,
@@ -145,8 +147,12 @@ def draw_rotated_text(
     if bg_color is not None:
         bg_pad = 4
         text_draw.rectangle(
-            [glyph_x0 - bg_pad, glyph_y0 - bg_pad,
-             glyph_x1 + bg_pad, glyph_y1 + bg_pad],
+            [
+                glyph_x0 - bg_pad,
+                glyph_y0 - bg_pad,
+                glyph_x1 + bg_pad,
+                glyph_y1 + bg_pad,
+            ],
             fill=bg_color + (255,),
         )
 
@@ -238,19 +244,22 @@ def add_label_near_structure(
         angle = random.uniform(*cfg.label_rotation_range)
 
     if random.random() < 0.30:
-        bg_color = random.choice([
-            (0, 0, 0),
-            (30, 30, 30),
-            (0, 0, 100),
-            (80, 0, 0),
-            (0, 60, 0),
-            (60, 0, 80),
-        ])
+        bg_color = random.choice(
+            [
+                (0, 0, 0),
+                (30, 30, 30),
+                (0, 0, 100),
+                (80, 0, 0),
+                (0, 60, 0),
+                (60, 0, 80),
+            ]
+        )
         fill_color = (255, 255, 255)
     else:
         bg_color = None
         fill_color = (0, 0, 0)
 
-    label_box = draw_rotated_text(page, label, (cx, cy), font, angle,
-                                  fill=fill_color, bg_color=bg_color)
+    label_box = draw_rotated_text(
+        page, label, (cx, cy), font, angle, fill=fill_color, bg_color=bg_color
+    )
     return label_box, label

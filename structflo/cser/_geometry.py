@@ -4,7 +4,9 @@ import random
 from typing import List, Optional, Tuple
 
 
-def clamp_box(box: Tuple[int, int, int, int], w: int, h: int) -> Tuple[int, int, int, int]:
+def clamp_box(
+    box: Tuple[int, int, int, int], w: int, h: int
+) -> Tuple[int, int, int, int]:
     """Clamp a bounding box so it stays within the page (0,0)-(w,h)."""
     x0, y0, x1, y1 = box
     x0 = max(0, min(x0, w - 1))
@@ -34,7 +36,12 @@ def try_place_box(
         x0 = random.randint(margin, max(margin, w - margin - box_w))
         y0 = random.randint(margin, max(margin, h - margin - box_h))
         box = (x0, y0, x0 + box_w, y0 + box_h)
-        padded = (x0 - padding, y0 - padding, x0 + box_w + padding, y0 + box_h + padding)
+        padded = (
+            x0 - padding,
+            y0 - padding,
+            x0 + box_w + padding,
+            y0 + box_h + padding,
+        )
         if not any(boxes_intersect(padded, b) for b in existing):
             return box
     return None

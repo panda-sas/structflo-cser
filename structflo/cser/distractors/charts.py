@@ -2,7 +2,6 @@
 
 import random
 
-import numpy as np
 from PIL import Image, ImageDraw
 
 
@@ -14,8 +13,14 @@ def _gen_bar_chart(width: int, height: int) -> Image.Image:
     bar_w = max(4, (width - 40) // n_bars - 4)
     max_bar_h = height - 40
     colors = [
-        (66, 133, 244), (219, 68, 55), (244, 180, 0), (15, 157, 88),
-        (171, 71, 188), (0, 172, 193), (255, 112, 67), (117, 117, 117),
+        (66, 133, 244),
+        (219, 68, 55),
+        (244, 180, 0),
+        (15, 157, 88),
+        (171, 71, 188),
+        (0, 172, 193),
+        (255, 112, 67),
+        (117, 117, 117),
     ]
     x_start = 20
     for i in range(n_bars):
@@ -35,9 +40,14 @@ def _gen_scatter_plot(width: int, height: int) -> Image.Image:
     img = Image.new("RGB", (width, height), (255, 255, 255))
     draw = ImageDraw.Draw(img)
     n_pts = random.randint(15, 60)
-    color = random.choice([
-        (66, 133, 244), (219, 68, 55), (15, 157, 88), (171, 71, 188),
-    ])
+    color = random.choice(
+        [
+            (66, 133, 244),
+            (219, 68, 55),
+            (15, 157, 88),
+            (171, 71, 188),
+        ]
+    )
     for _ in range(n_pts):
         cx = random.randint(25, width - 15)
         cy = random.randint(15, height - 25)
@@ -78,14 +88,21 @@ def _gen_pie_chart(size: int) -> Image.Image:
     values = [random.random() for _ in range(n_slices)]
     total = sum(values)
     colors = [
-        (66, 133, 244), (219, 68, 55), (244, 180, 0), (15, 157, 88),
-        (171, 71, 188), (0, 172, 193), (255, 112, 67),
+        (66, 133, 244),
+        (219, 68, 55),
+        (244, 180, 0),
+        (15, 157, 88),
+        (171, 71, 188),
+        (0, 172, 193),
+        (255, 112, 67),
     ]
     margin = 10
     bbox = [margin, margin, size - margin, size - margin]
     start = 0
     for i, v in enumerate(values):
         extent = (v / total) * 360
-        draw.pieslice(bbox, start, start + extent, fill=colors[i % len(colors)], outline=(0, 0, 0))
+        draw.pieslice(
+            bbox, start, start + extent, fill=colors[i % len(colors)], outline=(0, 0, 0)
+        )
         start += extent
     return img
