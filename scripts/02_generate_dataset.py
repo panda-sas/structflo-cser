@@ -230,6 +230,7 @@ def draw_rotated_text(
     font: ImageFont.ImageFont,
     angle: float,
     fill: Tuple[int, int, int] = (0, 0, 0),
+    bg_color: Optional[Tuple[int, int, int]] = None,
 ) -> Tuple[int, int, int, int]:
     draw = ImageDraw.Draw(base)
     text_bbox = draw.textbbox((0, 0), text, font=font)
@@ -251,6 +252,17 @@ def draw_rotated_text(
 
     text_img = Image.new("RGBA", (padded_w, padded_h), (255, 255, 255, 0))
     text_draw = ImageDraw.Draw(text_img)
+
+    if bg_color is not None:
+        # Draw a filled background rectangle tightly around the text glyphs
+        tx = canvas_padding - text_bbox[0]
+        ty = canvas_padding - text_bbox[1]
+        bg_pad = 4
+        text_draw.rectangle(
+            [tx - bg_pad, ty - bg_pad, tx + text_w + bg_pad, ty + text_h + bg_pad],
+            fill=bg_color + (255,),
+        )
+
     text_draw.text((canvas_padding - text_bbox[0], canvas_padding - text_bbox[1]),
                    text, font=font, fill=fill + (255,))
 
@@ -376,7 +388,23 @@ def add_label_near_structure(
     elif random.random() < cfg.label_rotation_prob:
         angle = random.uniform(*cfg.label_rotation_range)
 
-    label_box = draw_rotated_text(page, label, (pos_x, pos_y), font, angle)
+    # 30% chance: dark background with light text
+    if random.random() < 0.30:
+        bg_color = random.choice([
+            (0, 0, 0),        # black
+            (30, 30, 30),     # dark grey
+            (0, 0, 100),      # dark blue
+            (80, 0, 0),       # dark red
+            (0, 60, 0),       # dark green
+            (60, 0, 80),      # dark purple
+        ])
+        fill_color = (255, 255, 255)
+    else:
+        bg_color = None
+        fill_color = (0, 0, 0)
+
+    label_box = draw_rotated_text(page, label, (pos_x, pos_y), font, angle,
+                                  fill=fill_color, bg_color=bg_color)
     return label_box, label
 
 
