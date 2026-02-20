@@ -10,13 +10,13 @@ from typing import List, Optional
 import numpy as np
 from tqdm import tqdm
 
-from struct_labels._geometry import clamp_box
-from struct_labels.config import make_page_config, make_page_config_slide
-from struct_labels.data.distractor_images import load_distractor_images
-from struct_labels.data.smiles import load_smiles
-from struct_labels.generation.page import apply_noise, make_negative_page, make_page
-from struct_labels.generation.specialty import make_data_card_page, make_mmp_page, make_sar_page
-from struct_labels.generation.tabular import make_excel_page, make_grid_page
+from structflo.cser._geometry import clamp_box
+from structflo.cser.config import make_page_config, make_page_config_slide
+from structflo.cser.data.distractor_images import load_distractor_images
+from structflo.cser.data.smiles import load_smiles
+from structflo.cser.generation.page import apply_noise, make_negative_page, make_page
+from structflo.cser.generation.specialty import make_data_card_page, make_mmp_page, make_sar_page
+from structflo.cser.generation.tabular import make_excel_page, make_grid_page
 
 
 def yolo_label(box: tuple, w: int, h: int, class_id: int = 0) -> str:

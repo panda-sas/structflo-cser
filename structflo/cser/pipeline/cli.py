@@ -24,14 +24,14 @@ import sys
 from pathlib import Path
 
 # Absolute imports so this file works both as `sl-extract` (installed entry point)
-# and as `python -m struct_labels.pipeline.cli` (direct module invocation).
-# Running `python struct_labels/pipeline/cli.py` directly will NOT work — use
-# `python -m struct_labels.pipeline.cli` from the project root instead.
-from struct_labels.inference.detector import DEFAULT_WEIGHTS
-from struct_labels.pipeline.matcher import HungarianMatcher
-from struct_labels.pipeline.ocr import EasyOCRExtractor, NullOCR
-from struct_labels.pipeline.pipeline import ChemPipeline
-from struct_labels.pipeline.smiles_extractor import DecimerExtractor, NullSmilesExtractor
+# and as `python -m structflo.cser.pipeline.cli` (direct module invocation).
+# Running `python structflo/cser/pipeline/cli.py` directly will NOT work — use
+# `python -m structflo.cser.pipeline.cli` from the project root instead.
+from structflo.cser.inference.detector import DEFAULT_WEIGHTS
+from structflo.cser.pipeline.matcher import HungarianMatcher
+from structflo.cser.pipeline.ocr import EasyOCRExtractor, NullOCR
+from structflo.cser.pipeline.pipeline import ChemPipeline
+from structflo.cser.pipeline.smiles_extractor import DecimerExtractor, NullSmilesExtractor
 
 
 def main() -> None:

@@ -7,11 +7,11 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 from ultralytics import YOLO
 
-from struct_labels.inference.nms import nms
-from struct_labels.inference.pairing import centroid, pair_detections
-from struct_labels.inference.tiling import generate_tiles
+from structflo.cser.inference.nms import nms
+from structflo.cser.inference.pairing import centroid, pair_detections
+from structflo.cser.inference.tiling import generate_tiles
 
-_PROJECT_ROOT = Path(__file__).parents[2]
+_PROJECT_ROOT = Path(__file__).parents[3]
 DEFAULT_WEIGHTS = (
     _PROJECT_ROOT / "runs" / "labels_detect" / "yolo11l_panels" / "weights" / "best.pt"
 )

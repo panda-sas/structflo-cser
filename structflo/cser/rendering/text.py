@@ -8,8 +8,8 @@ from typing import List, Optional, Tuple
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
-from struct_labels._geometry import boxes_intersect
-from struct_labels.config import PageConfig
+from structflo.cser._geometry import boxes_intersect
+from structflo.cser.config import PageConfig
 
 
 def _rand_prefix(min_len: int = 3, max_len: int = 6) -> str:

@@ -6,10 +6,10 @@ from typing import List, Optional, Tuple
 
 from PIL import Image, ImageDraw
 
-from struct_labels.config import PageConfig
-from struct_labels.generation.tabular import _COLUMN_GENERATORS, _text_size
-from struct_labels.rendering.chemistry import render_structure
-from struct_labels.rendering.text import draw_rotated_text, load_font, random_label
+from structflo.cser.config import PageConfig
+from structflo.cser.generation.tabular import _COLUMN_GENERATORS, _text_size
+from structflo.cser.rendering.chemistry import render_structure
+from structflo.cser.rendering.text import draw_rotated_text, load_font, random_label
 
 # ---------------------------------------------------------------------------
 # Shared constants

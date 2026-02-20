@@ -1,8 +1,8 @@
-"""struct_labels.pipeline — extraction pipeline with adapter pattern.
+"""structflo.cser.pipeline — extraction pipeline with adapter pattern.
 
 Quick start
 -----------
->>> from struct_labels.pipeline import ChemPipeline
+>>> from structflo.cser.pipeline import ChemPipeline
 >>> pipeline = ChemPipeline()
 >>> pairs = pipeline.process("page.png")          # full pipeline
 >>> df = ChemPipeline.to_dataframe(pairs)
@@ -15,15 +15,15 @@ Step-by-step
 
 Custom adapters
 ---------------
->>> from struct_labels.pipeline import ChemPipeline, HungarianMatcher
+>>> from structflo.cser.pipeline import ChemPipeline, HungarianMatcher
 >>> pipeline = ChemPipeline(matcher=HungarianMatcher(max_distance=500))
 """
 
-from .matcher import BaseMatcher, HungarianMatcher
-from .models import BBox, CompoundPair, Detection
-from .ocr import BaseOCR, EasyOCRExtractor, NullOCR
-from .pipeline import ChemPipeline
-from .smiles_extractor import BaseSmilesExtractor, DecimerExtractor, NullSmilesExtractor
+from structflo.cser.pipeline.matcher import BaseMatcher, HungarianMatcher
+from structflo.cser.pipeline.models import BBox, CompoundPair, Detection
+from structflo.cser.pipeline.ocr import BaseOCR, EasyOCRExtractor, NullOCR
+from structflo.cser.pipeline.pipeline import ChemPipeline
+from structflo.cser.pipeline.smiles_extractor import BaseSmilesExtractor, DecimerExtractor, NullSmilesExtractor
 
 __all__ = [
     # Pipeline

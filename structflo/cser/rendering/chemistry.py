@@ -10,8 +10,8 @@ from rdkit import Chem
 from rdkit.Chem import AllChem
 from rdkit.Chem.Draw import rdMolDraw2D
 
-from struct_labels._geometry import boxes_intersect
-from struct_labels.config import PageConfig
+from structflo.cser._geometry import boxes_intersect
+from structflo.cser.config import PageConfig
 
 
 def render_structure(smiles: str, size: int, cfg: PageConfig) -> Optional[Image.Image]:

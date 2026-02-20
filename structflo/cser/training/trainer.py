@@ -6,7 +6,7 @@ from pathlib import Path
 from ultralytics import YOLO
 
 # Paths are resolved relative to this file's location in the installed package
-_PROJECT_ROOT = Path(__file__).parents[2]
+_PROJECT_ROOT = Path(__file__).parents[3]
 DATA_YAML = _PROJECT_ROOT / "config" / "data.yaml"
 RUNS_DIR = _PROJECT_ROOT / "runs" / "labels_detect"
 

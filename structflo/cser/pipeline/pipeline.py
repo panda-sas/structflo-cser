@@ -9,12 +9,12 @@ from typing import Union
 import numpy as np
 from PIL import Image
 
-from struct_labels.inference.detector import DEFAULT_WEIGHTS, detect_full, detect_tiled
+from structflo.cser.inference.detector import DEFAULT_WEIGHTS, detect_full, detect_tiled
 
-from .matcher import BaseMatcher, HungarianMatcher
-from .models import BBox, CompoundPair, Detection
-from .ocr import BaseOCR, EasyOCRExtractor
-from .smiles_extractor import BaseSmilesExtractor, DecimerExtractor
+from structflo.cser.pipeline.matcher import BaseMatcher, HungarianMatcher
+from structflo.cser.pipeline.models import BBox, CompoundPair, Detection
+from structflo.cser.pipeline.ocr import BaseOCR, EasyOCRExtractor
+from structflo.cser.pipeline.smiles_extractor import BaseSmilesExtractor, DecimerExtractor
 
 # Anything the pipeline accepts as an image input
 ImageLike = Union[Path, str, np.ndarray, Image.Image]

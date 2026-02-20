@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
-from .models import CompoundPair, Detection
+from structflo.cser.pipeline.models import CompoundPair, Detection
 
 
 class BaseMatcher(ABC):
@@ -35,7 +35,7 @@ class HungarianMatcher(BaseMatcher):
         self.max_distance = max_distance
 
     def match(self, detections: list[Detection]) -> list[CompoundPair]:
-        from struct_labels.inference.pairing import pair_detections
+        from structflo.cser.inference.pairing import pair_detections
 
         # Detection → raw dict (what pair_detections expects)
         raw = [

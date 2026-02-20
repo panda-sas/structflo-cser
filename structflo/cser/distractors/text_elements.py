@@ -7,9 +7,9 @@ from typing import List, Tuple
 
 from PIL import Image, ImageDraw
 
-from struct_labels._geometry import boxes_intersect, try_place_box
-from struct_labels.config import PageConfig
-from struct_labels.rendering.text import load_font
+from structflo.cser._geometry import boxes_intersect, try_place_box
+from structflo.cser.config import PageConfig
+from structflo.cser.rendering.text import load_font
 
 # ---------------------------------------------------------------------------
 # Text corpora

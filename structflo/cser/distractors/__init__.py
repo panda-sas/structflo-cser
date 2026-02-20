@@ -5,22 +5,22 @@ from typing import List, Optional, Tuple
 
 from PIL import Image
 
-from struct_labels._geometry import try_place_box
-from struct_labels.data.distractor_images import _pick_distractor_image
-from struct_labels.distractors.charts import (
+from structflo.cser._geometry import try_place_box
+from structflo.cser.data.distractor_images import _pick_distractor_image
+from structflo.cser.distractors.charts import (
     _gen_bar_chart,
     _gen_line_plot,
     _gen_pie_chart,
     _gen_scatter_plot,
 )
-from struct_labels.distractors.shapes import (
+from structflo.cser.distractors.shapes import (
     _gen_geometric_shapes,
     _gen_gradient_block,
     _gen_noise_patch,
 )
 
 # Re-export text element functions for convenience
-from struct_labels.distractors.text_elements import (  # noqa: F401
+from structflo.cser.distractors.text_elements import (  # noqa: F401
     add_arrow,
     add_caption,
     add_equation_fragment,
@@ -34,7 +34,7 @@ from struct_labels.distractors.text_elements import (  # noqa: F401
     add_section_header,
     add_stray_text,
 )
-from struct_labels.config import PageConfig
+from structflo.cser.config import PageConfig
 
 RANDOM_IMAGE_GENERATORS = [
     lambda: _gen_bar_chart(random.randint(180, 400), random.randint(140, 300)),

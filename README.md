@@ -1,6 +1,11 @@
-# struct_labels
+# structflo-cser
 
 YOLO11l-based detector for chemical structures and their compound label IDs in scientific documents.
+
+Part of the **structflo** library. Import as:
+```python
+from structflo.cser.pipeline import ChemPipeline
+```
 
 **Detection target:** A single bounding box (`compound_panel`) enclosing the union of a rendered chemical structure and its nearby label ID (e.g. `CHEMBL12345`).
 
@@ -12,20 +17,20 @@ YOLO11l-based detector for chemical structures and their compound label IDs in s
 uv pip install -e .
 ```
 
-This installs all dependencies and registers the `sl-*` CLI commands on your PATH.
+This installs all dependencies and registers the `sf-*` CLI commands on your PATH.
 
 ---
 
 ## Pipeline
 
 ```
-1. Fetch SMILES          →  sl-fetch-smiles
-2. Download distractors  →  sl-download-distractors   (optional but recommended)
-3. Generate dataset      →  sl-generate
-4. Visualize labels      →  sl-viz                    (optional QA check)
-5. Train YOLO            →  sl-train
-6. Run inference         →  sl-detect
-7. Annotate real PDFs    →  sl-annotate               (optional)
+1. Fetch SMILES          →  sf-fetch-smiles
+2. Download distractors  →  sf-download-distractors   (optional but recommended)
+3. Generate dataset      →  sf-generate
+4. Visualize labels      →  sf-viz                    (optional QA check)
+5. Train YOLO            →  sf-train
+6. Run inference         →  sf-detect
+7. Annotate real PDFs    →  sf-annotate               (optional)
 ```
 
 ---
@@ -37,7 +42,7 @@ This installs all dependencies and registers the `sl-*` CLI commands on your PAT
 Extracts ~20 k small-molecule SMILES from a local [ChEMBL SQLite database](https://ftp.ebi.ac.uk/pub/databases/chembl/ChEMBLdb/latest/).
 
 ```bash
-sl-fetch-smiles \
+sf-fetch-smiles \
   --db chembl_35/chembl_35_sqlite/chembl_35.db \
   --output data/smiles/chembl_smiles.csv \
   --n 20000
@@ -52,7 +57,7 @@ Output: `data/smiles/chembl_smiles.csv`
 Downloads real photographs from [Lorem Picsum](https://picsum.photos/) to use as hard-negative distractors during page generation.
 
 ```bash
-sl-download-distractors --out data/distractors --count 1000
+sf-download-distractors --out data/distractors --count 1000
 ```
 
 ---
@@ -62,7 +67,7 @@ sl-download-distractors --out data/distractors --count 1000
 Generates document-like pages (A4 @ 300 DPI or slide format) containing chemical structures, compound labels, and distractor elements.
 
 ```bash
-sl-generate \
+sf-generate \
   --smiles data/smiles/chembl_smiles.csv \
   --out data/generated \
   --num-train 2000 --num-val 400 \
@@ -102,7 +107,7 @@ data/generated/
 Overlays YOLO bounding boxes on a random sample of generated pages.
 
 ```bash
-sl-viz --split both --n 30 --out data/viz
+sf-viz --split both --n 30 --out data/viz
 ```
 
 Green boxes = `chemical_structure`, blue boxes = `compound_label`.
@@ -114,7 +119,7 @@ Green boxes = `chemical_structure`, blue boxes = `compound_label`.
 Fine-tunes YOLO11l on the generated dataset.
 
 ```bash
-sl-train --epochs 50 --imgsz 1280 --batch 8
+sf-train --epochs 50 --imgsz 1280 --batch 8
 ```
 
 Key options:
@@ -136,13 +141,13 @@ Runs the trained detector on images using sliding-window tiling (1536 px tiles, 
 
 ```bash
 # Single image
-sl-detect --image page.png
+sf-detect --image page.png
 
 # Directory of images
-sl-detect --image_dir data/real/images/ --out detections/
+sf-detect --image_dir data/real/images/ --out detections/
 
 # With Hungarian pairing of structures → labels
-sl-detect --image page.png --pair --max_dist 300
+sf-detect --image page.png --pair --max_dist 300
 ```
 
 Key options:
@@ -163,7 +168,7 @@ Key options:
 Web-based annotation tool for creating ground truth from real PDF documents.
 
 ```bash
-sl-annotate --out data/real --port 8000
+sf-annotate --out data/real --port 8000
 # then open http://127.0.0.1:8000 in a browser
 ```
 
@@ -172,7 +177,7 @@ sl-annotate --out data/real --port 8000
 ## Package layout
 
 ```
-struct_labels/               # importable package
+structflo/cser/              # importable package (from structflo.cser import ...)
 ├── _geometry.py             # shared bbox utilities (boxes_intersect, try_place_box)
 ├── config.py                # PageConfig dataclass + make_page_config()
 ├── data/
@@ -215,11 +220,11 @@ data/
 ├── smiles/
 │   └── chembl_smiles.csv    # ~20 k SMILES from ChEMBL
 ├── fonts/                   # TTF/OTF fonts for label rendering
-├── distractors/             # ~1 k real photos (sl-download-distractors output)
-├── generated/               # synthetic dataset (sl-generate output)
+├── distractors/             # ~1 k real photos (sf-download-distractors output)
+├── generated/               # synthetic dataset (sf-generate output)
 │   ├── train/
 │   └── val/
-└── real/                    # manually annotated real pages (sl-annotate output)
+└── real/                    # manually annotated real pages (sf-annotate output)
     ├── images/
     ├── labels/
     └── ground_truth/

@@ -7,8 +7,8 @@ from typing import List, Optional, Tuple
 import numpy as np
 from PIL import Image, ImageFilter
 
-from struct_labels.config import PageConfig
-from struct_labels.distractors import (
+from structflo.cser.config import PageConfig
+from structflo.cser.distractors import (
     add_arrow,
     add_caption,
     add_equation_fragment,
@@ -23,8 +23,8 @@ from struct_labels.distractors import (
     add_section_header,
     add_stray_text,
 )
-from struct_labels.rendering.chemistry import place_structure, render_structure
-from struct_labels.rendering.text import add_label_near_structure
+from structflo.cser.rendering.chemistry import place_structure, render_structure
+from structflo.cser.rendering.text import add_label_near_structure
 
 
 def apply_noise(img: Image.Image, cfg: PageConfig) -> Image.Image:
