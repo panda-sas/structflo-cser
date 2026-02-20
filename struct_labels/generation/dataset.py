@@ -15,6 +15,7 @@ from struct_labels.config import make_page_config, make_page_config_slide
 from struct_labels.data.distractor_images import load_distractor_images
 from struct_labels.data.smiles import load_smiles
 from struct_labels.generation.page import apply_noise, make_negative_page, make_page
+from struct_labels.generation.tabular import make_excel_page, make_grid_page
 
 
 def yolo_label(box: tuple, w: int, h: int, class_id: int = 0) -> str:
@@ -109,15 +110,21 @@ def _generate_one_page(args: tuple) -> None:
     np.random.seed(page_seed % (2**32))
 
     dpi = random.choice(dpi_choices)
-    if random.random() < 0.20:
+    roll = random.random()
+
+    if roll < 0.15:
         cfg = make_page_config_slide(min(dpi, 200))
+        page, panels = make_page(_mp_smiles, cfg, _mp_fonts, _mp_distractors)
     else:
         cfg = make_page_config(dpi)
-
-    if random.random() < 0.15:
-        page, panels = make_negative_page(cfg, _mp_fonts, _mp_distractors)
-    else:
-        page, panels = make_page(_mp_smiles, cfg, _mp_fonts, _mp_distractors)
+        if roll < 0.25:    # ~10 % hard negatives
+            page, panels = make_negative_page(cfg, _mp_fonts, _mp_distractors)
+        elif roll < 0.43:  # ~18 % Excel-style tables
+            page, panels = make_excel_page(_mp_smiles, cfg, _mp_fonts, _mp_distractors)
+        elif roll < 0.58:  # ~15 % clean compound grids
+            page, panels = make_grid_page(_mp_smiles, cfg, _mp_fonts, _mp_distractors)
+        else:              # ~42 % regular free-form pages
+            page, panels = make_page(_mp_smiles, cfg, _mp_fonts, _mp_distractors)
 
     img_path = Path(img_dir) / f"{split}_{i:06d}.{fmt}"
     lbl_path = Path(lbl_dir) / f"{split}_{i:06d}.txt"
@@ -171,14 +178,20 @@ def generate_dataset(
         def run_split(count: int, img_dir: Path, lbl_dir: Path, gt_dir: Path, split: str) -> None:
             for i in tqdm(range(count), desc=f"Generating {split}"):
                 dpi = random.choice(dpi_choices)
-                if random.random() < 0.20:
+                roll = random.random()
+                if roll < 0.15:
                     cfg = make_page_config_slide(min(dpi, 200))
+                    page, panels = make_page(smiles_pool, cfg, font_paths, distractor_pool)
                 else:
                     cfg = make_page_config(dpi)
-                if random.random() < 0.15:
-                    page, panels = make_negative_page(cfg, font_paths, distractor_pool)
-                else:
-                    page, panels = make_page(smiles_pool, cfg, font_paths, distractor_pool)
+                    if roll < 0.25:
+                        page, panels = make_negative_page(cfg, font_paths, distractor_pool)
+                    elif roll < 0.43:
+                        page, panels = make_excel_page(smiles_pool, cfg, font_paths, distractor_pool)
+                    elif roll < 0.58:
+                        page, panels = make_grid_page(smiles_pool, cfg, font_paths, distractor_pool)
+                    else:
+                        page, panels = make_page(smiles_pool, cfg, font_paths, distractor_pool)
                 img_path = img_dir / f"{split}_{i:06d}.{fmt}"
                 lbl_path = lbl_dir / f"{split}_{i:06d}.txt"
                 gt_path  = gt_dir  / f"{split}_{i:06d}.json"
