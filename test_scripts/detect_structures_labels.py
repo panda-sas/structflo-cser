@@ -16,6 +16,7 @@ from pathlib import Path
 
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
+from scipy.optimize import linear_sum_assignment
 from ultralytics import YOLO
 
 ROOT = Path(__file__).parent.parent
@@ -116,9 +117,54 @@ def detect_full(model: YOLO, img: np.ndarray,
     return out
 
 
+# ── Pairing ───────────────────────────────────────────────────────────────────
+
+def centroid(bbox: list) -> tuple:
+    return ((bbox[0] + bbox[2]) / 2, (bbox[1] + bbox[3]) / 2)
+
+
+def pair_detections(detections: list[dict], max_distance: float | None = None) -> list[dict]:
+    """
+    Match each structure to its nearest label via Hungarian matching on centroid distance.
+
+    Returns a list of pairs:
+        [{"structure": det, "label": det, "distance": float}, ...]
+
+    Unmatched detections (when counts differ) are silently dropped from pairing.
+    If max_distance is set, pairs beyond that pixel distance are also dropped.
+    """
+    structures = [d for d in detections if d["class_id"] == 0]
+    labels     = [d for d in detections if d["class_id"] == 1]
+
+    if not structures or not labels:
+        return []
+
+    # Cost matrix: rows = structures, cols = labels
+    cost = np.zeros((len(structures), len(labels)))
+    for i, s in enumerate(structures):
+        sc = centroid(s["bbox"])
+        for j, lb in enumerate(labels):
+            lc = centroid(lb["bbox"])
+            cost[i, j] = np.hypot(sc[0] - lc[0], sc[1] - lc[1])
+
+    row_ind, col_ind = linear_sum_assignment(cost)
+
+    pairs = []
+    for r, c in zip(row_ind, col_ind):
+        dist = cost[r, c]
+        if max_distance is None or dist <= max_distance:
+            pairs.append({
+                "structure": structures[r],
+                "label":     labels[c],
+                "distance":  dist,
+            })
+    return pairs
+
+
 # ── Visualisation ─────────────────────────────────────────────────────────────
 
-def draw_boxes(img_pil: Image.Image, detections: list[dict]) -> Image.Image:
+def draw_boxes(img_pil: Image.Image, detections: list[dict],
+               pairs: list[dict] | None = None) -> Image.Image:
     vis = img_pil.copy()
     draw = ImageDraw.Draw(vis)
     try:
@@ -126,13 +172,26 @@ def draw_boxes(img_pil: Image.Image, detections: list[dict]) -> Image.Image:
     except Exception:
         font = ImageFont.load_default()
 
+    # Draw raw boxes
     for d in detections:
         x1, y1, x2, y2 = [int(v) for v in d["bbox"]]
-        cls = d.get("class_id", 0)
+        cls   = d.get("class_id", 0)
         color = CLASS_COLORS.get(cls, (255, 0, 0))
         name  = CLASS_NAMES.get(cls, str(cls))
         draw.rectangle([x1, y1, x2, y2], outline=color, width=4)
         draw.text((x1 + 4, y1 + 4), f"{name} {d['conf']:.2f}", fill=color, font=font)
+
+    # Draw pairing lines + pair index
+    if pairs:
+        for idx, pair in enumerate(pairs):
+            sc = centroid(pair["structure"]["bbox"])
+            lc = centroid(pair["label"]["bbox"])
+            # Line connecting centroids
+            draw.line([sc, lc], fill=(255, 140, 0), width=3)
+            # Pair number at midpoint
+            mid = ((sc[0] + lc[0]) / 2, (sc[1] + lc[1]) / 2)
+            draw.text((int(mid[0]) + 4, int(mid[1]) + 4), str(idx),
+                      fill=(255, 140, 0), font=font)
 
     return vis
 
@@ -141,7 +200,8 @@ def draw_boxes(img_pil: Image.Image, detections: list[dict]) -> Image.Image:
 
 def process_image(model: YOLO, image_path: Path, out_dir: Path,
                   tile: bool, tile_size: int, conf: float,
-                  rescale_dpi: int = 0, grayscale: bool = False) -> list[dict]:
+                  rescale_dpi: int = 0, grayscale: bool = False,
+                  do_pair: bool = False, max_dist: float | None = None) -> list[dict]:
     img_pil = Image.open(image_path).convert("RGB")
     dpi_info = img_pil.info.get("dpi", (None, None))
     src_dpi  = dpi_info[0] if dpi_info[0] else None
@@ -173,7 +233,8 @@ def process_image(model: YOLO, image_path: Path, out_dir: Path,
         for d in detections:
             d["bbox"] = [v / scale for v in d["bbox"]]
 
-    vis = draw_boxes(orig_pil, detections)
+    pairs = pair_detections(detections, max_distance=max_dist) if do_pair else None
+    vis = draw_boxes(orig_pil, detections, pairs=pairs)
     out_path = out_dir / f"{image_path.stem}_detect.jpg"
     vis.save(str(out_path), quality=90)
 
@@ -185,6 +246,10 @@ def process_image(model: YOLO, image_path: Path, out_dir: Path,
         cls = CLASS_NAMES.get(d.get("class_id", 0), "?")
         print(f"  [{i}] {cls:9s} conf={d['conf']:.3f}  "
               f"bbox=({bb[0]:.0f},{bb[1]:.0f},{bb[2]:.0f},{bb[3]:.0f})")
+    if pairs is not None:
+        print(f"  Pairs ({len(pairs)}):")
+        for idx, pair in enumerate(pairs):
+            print(f"    [{idx}] dist={pair['distance']:.0f}px")
     return detections
 
 
@@ -205,6 +270,10 @@ def main():
                         "Only useful if src DPI metadata is embedded.")
     p.add_argument("--grayscale", action="store_true",
                    help="Convert image to grayscale before detection (match grayscale training data).")
+    p.add_argument("--pair", action="store_true",
+                   help="Run Hungarian matching to pair structures with labels.")
+    p.add_argument("--max_dist", type=float, default=None,
+                   help="Max centroid distance (px) for a valid pair. Default: no limit.")
     args = p.parse_args()
 
     if not args.image and not args.image_dir:
@@ -235,7 +304,9 @@ def main():
                           tile_size=args.tile_size,
                           conf=args.conf,
                           rescale_dpi=args.rescale_dpi,
-                          grayscale=args.grayscale)
+                          grayscale=args.grayscale,
+                          do_pair=args.pair,
+                          max_dist=args.max_dist)
         except Exception as e:
             print(f"ERROR {path.name}: {e}")
 
