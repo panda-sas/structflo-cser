@@ -10,11 +10,7 @@ from ultralytics import YOLO
 from structflo.cser.inference.nms import nms
 from structflo.cser.inference.pairing import centroid, pair_detections
 from structflo.cser.inference.tiling import generate_tiles
-
-_PROJECT_ROOT = Path(__file__).parents[3]
-DEFAULT_WEIGHTS = (
-    _PROJECT_ROOT / "runs" / "labels_detect" / "yolo11l_panels" / "weights" / "best.pt"
-)
+from structflo.cser.weights import resolve_weights
 
 CLASS_NAMES = {0: "structure", 1: "label"}
 CLASS_COLORS = {0: (0, 200, 0), 1: (0, 100, 255)}  # green, blue
@@ -195,7 +191,12 @@ def main() -> None:
     p = argparse.ArgumentParser(description="YOLO compound panel detection")
     p.add_argument("--image", help="Single image (PNG/JPG)")
     p.add_argument("--image_dir", help="Directory of images")
-    p.add_argument("--weights", default=str(DEFAULT_WEIGHTS))
+    p.add_argument(
+        "--weights",
+        default=None,
+        help="Weights version tag (e.g. v1.0) or path to a local .pt file. "
+             "Defaults to the latest published weights (auto-downloaded).",
+    )
     p.add_argument(
         "--out", default="detections", help="Output directory for visualisations"
     )
@@ -233,9 +234,10 @@ def main() -> None:
     if not args.image and not args.image_dir:
         p.error("Provide --image or --image_dir")
 
-    weights = Path(args.weights)
-    if not weights.exists():
-        p.error(f"Weights not found: {weights}")
+    try:
+        weights = resolve_weights("cser-detector", version=args.weights)
+    except (FileNotFoundError, RuntimeError) as e:
+        p.error(str(e))
 
     out_dir = Path(args.out)
     out_dir.mkdir(parents=True, exist_ok=True)

@@ -9,7 +9,8 @@ from typing import Union
 import numpy as np
 from PIL import Image
 
-from structflo.cser.inference.detector import DEFAULT_WEIGHTS, detect_full, detect_tiled
+from structflo.cser.inference.detector import detect_full, detect_tiled
+from structflo.cser.weights import resolve_weights
 
 from structflo.cser.pipeline.matcher import BaseMatcher, HungarianMatcher
 from structflo.cser.pipeline.models import BBox, CompoundPair, Detection
@@ -71,8 +72,9 @@ class ChemPipeline:
     ) -> None:
         """
         Args:
-            weights:          Path to YOLO .pt weights file.  Defaults to the
-                              trained model in ``runs/labels_detect/``.
+            weights:          Weights version tag (e.g. ``"v1.0"``) or path to a
+                              local ``.pt`` file.  ``None`` auto-downloads the
+                              latest published weights.
             matcher:          Pairing strategy.  Defaults to HungarianMatcher.
             smiles_extractor: SMILES model.  Defaults to DecimerExtractor.
             ocr:              OCR engine.  Defaults to PaddleOCRExtractor.
@@ -80,7 +82,7 @@ class ChemPipeline:
             tile_size:        Tile side length in pixels.
             conf:             YOLO confidence threshold.
         """
-        self._weights_path = Path(weights) if weights else DEFAULT_WEIGHTS
+        self._weights = weights  # version tag, local path str/Path, or None
         self._matcher = matcher or HungarianMatcher()
         self._smiles = smiles_extractor or DecimerExtractor()
         self._ocr = ocr or EasyOCRExtractor()
@@ -97,7 +99,8 @@ class ChemPipeline:
         if self._model is None:
             from ultralytics import YOLO
 
-            self._model = YOLO(str(self._weights_path))
+            weights_path = resolve_weights("cser-detector", version=self._weights)
+            self._model = YOLO(str(weights_path))
 
     @staticmethod
     def _crop(image: Image.Image, bbox: BBox) -> Image.Image:

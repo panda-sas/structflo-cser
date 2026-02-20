@@ -27,7 +27,6 @@ from pathlib import Path
 # and as `python -m structflo.cser.pipeline.cli` (direct module invocation).
 # Running `python structflo/cser/pipeline/cli.py` directly will NOT work — use
 # `python -m structflo.cser.pipeline.cli` from the project root instead.
-from structflo.cser.inference.detector import DEFAULT_WEIGHTS
 from structflo.cser.pipeline.matcher import HungarianMatcher
 from structflo.cser.pipeline.ocr import EasyOCRExtractor, NullOCR
 from structflo.cser.pipeline.pipeline import ChemPipeline
@@ -45,7 +44,10 @@ def main() -> None:
     )
     p.add_argument("--image", required=True, help="Input image path (PNG / JPG)")
     p.add_argument(
-        "--weights", default=str(DEFAULT_WEIGHTS), help="YOLO weights .pt file"
+        "--weights",
+        default=None,
+        help="Weights version tag (e.g. v1.0) or path to a local .pt file. "
+             "Defaults to the latest published weights (auto-downloaded).",
     )
     p.add_argument(
         "--conf", type=float, default=0.3, help="Detection confidence threshold"
