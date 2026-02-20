@@ -21,6 +21,12 @@ button.save   { background: #1e4a1e; border-color: #3a8a3a; color: #9f9; }
 button.empty  { background: #2a2a4a; border-color: #4a4aaa; color: #aaf; }
 button.danger { background: #4a1e1e; border-color: #aa3a3a; color: #f99; }
 button:disabled { opacity: 0.35; cursor: default; }
+/* Class toggle */
+#class-toggle { display: flex; gap: 4px; align-items: center; }
+#class-toggle label { color: #aaa; font-size: 12px; }
+.cls-btn { padding: 4px 10px; font-size: 12px; }
+.cls-btn.struct.active { background: #1a4a1a; border-color: #00c853; color: #00c853; }
+.cls-btn.lbl.active    { background: #1a2a4a; border-color: #2979ff; color: #6fa3ff; }
 #sep { color: #444; }
 #page-info { color: #9f9; font-size: 13px; min-width: 110px; }
 #progress   { color: #888; font-size: 11px; }
@@ -85,6 +91,14 @@ canvas { position: absolute; top: 0; left: 0; }
 
   <span class="sep">|</span>
 
+  <div id="class-toggle">
+    <label>Class:</label>
+    <button class="cls-btn struct active" id="cls-struct" title="Draw chemical structure boxes (0)">Structure (1)</button>
+    <button class="cls-btn lbl"           id="cls-lbl"    title="Draw compound label boxes (1)">Label (2)</button>
+  </div>
+
+  <span class="sep">|</span>
+
   <button id="export-btn" class="save" disabled>Export &amp; Save All</button>
 
   <span id="progress"></span>
@@ -122,6 +136,8 @@ canvas { position: absolute; top: 0; left: 0; }
 
 <script>
 const DISPLAY_WIDTH = 900;
+const CLASS_COLORS = {0: '#00c853', 1: '#2979ff'};
+const CLASS_NAMES  = {0: 'struct',  1: 'label'};
 
 // State
 let pages = [], pageIdx = 0;
@@ -129,6 +145,7 @@ let boxes = [], selectedBox = -1;
 let imgW = 0, imgH = 0, scale = 1;
 let isDrawing = false, sx = 0, sy = 0, cx = 0, cy = 0;
 let dirty = false;
+let currentClass = 0;
 
 // DOM
 const canvas   = document.getElementById('overlay');
@@ -139,6 +156,23 @@ const pageInfo = document.getElementById('page-info');
 const progress = document.getElementById('progress');
 const sidebarTitle = document.getElementById('sidebar-title');
 const sidebarBadge = document.getElementById('sidebar-badge');
+
+// ── Class toggle ──────────────────────────────────────────────────────────────
+document.getElementById('cls-struct').addEventListener('click', () => setClass(0));
+document.getElementById('cls-lbl').addEventListener('click',    () => setClass(1));
+
+function setClass(id) {
+  currentClass = id;
+  document.getElementById('cls-struct').classList.toggle('active', id === 0);
+  document.getElementById('cls-lbl').classList.toggle('active',    id === 1);
+}
+
+// Keyboard shortcut: 1 = structure, 2 = label
+document.addEventListener('keydown', async e => {
+  if (e.target.tagName === 'INPUT') return;
+  if (e.key === '1') { setClass(0); return; }
+  if (e.key === '2') { setClass(1); return; }
+});
 
 // ── Upload ────────────────────────────────────────────────────────────────────
 document.getElementById('upload-btn').addEventListener('click', async () => {
@@ -248,6 +282,7 @@ canvas.addEventListener('mouseup', e => {
       y1: Math.round(Math.min(sy, ey) / scale),
       x2: Math.round(Math.max(sx, ex) / scale),
       y2: Math.round(Math.max(sy, ey) / scale),
+      class_id: currentClass,
     });
     dirty = true;
     renderBoxList();
@@ -262,12 +297,13 @@ function redraw() {
   boxes.forEach((b, i) => {
     const x = b.x1 * scale, y = b.y1 * scale;
     const w = (b.x2 - b.x1) * scale, h = (b.y2 - b.y1) * scale;
-    ctx.strokeStyle = i === selectedBox ? '#ffff00' : '#00e87a';
+    const baseColor = CLASS_COLORS[b.class_id ?? 0];
+    ctx.strokeStyle = i === selectedBox ? '#ffff00' : baseColor;
     ctx.lineWidth   = i === selectedBox ? 2.5 : 1.5;
     ctx.strokeRect(x, y, w, h);
     ctx.fillStyle = ctx.strokeStyle;
     ctx.font = 'bold 11px monospace';
-    ctx.fillText(i, x + 3, y + 13);
+    ctx.fillText(`${i}:${CLASS_NAMES[b.class_id ?? 0]}`, x + 3, y + 13);
   });
 
   if (isDrawing) {
@@ -288,10 +324,14 @@ function renderBoxList() {
     return;
   }
   boxes.forEach((b, i) => {
+    const cls = b.class_id ?? 0;
+    const clsColor = CLASS_COLORS[cls];
+    const clsName  = CLASS_NAMES[cls];
     const el = document.createElement('div');
     el.className = 'box-row' + (i === selectedBox ? ' selected' : '');
     el.innerHTML =
       `<span class="box-num">${i}</span>` +
+      `<span style="color:${clsColor};font-size:10px;min-width:42px">${clsName}</span>` +
       `<span class="box-coords">${b.x1},${b.y1}→${b.x2},${b.y2}</span>` +
       `<span class="box-del" title="Delete box ${i}">×</span>`;
     el.querySelector('.box-del').addEventListener('click', e => {
@@ -409,6 +449,7 @@ function setStatus(msg, level = 'ok') {
 }
 
 // ── Keyboard shortcuts ────────────────────────────────────────────────────────
+// 1/2 class toggle handled by the class toggle section above
 document.addEventListener('keydown', async e => {
   if (e.target.tagName === 'INPUT') return;
   if (e.key === 's' || e.key === 'S') { await saveCurrent(); }

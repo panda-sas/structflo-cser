@@ -2,6 +2,7 @@ path: /home/sidx/workspace/struct_labels/data/generated
 train: train/images
 val: val/images
 
-nc: 1
+nc: 2
 names:
-  0: compound_panel
+  0: chemical_structure
+  1: compound_label

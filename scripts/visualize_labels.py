@@ -18,10 +18,12 @@ from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
 
 
-BOX_COLOR = (255, 0, 0)      # Red bounding box
 BOX_WIDTH = 6                 # Pixels — thick enough to see on 2480×3508
 LABEL_COLOR = (255, 255, 255) # White text on label tag
-TAG_BG = (255, 0, 0)          # Red tag background
+CLASS_COLORS = {
+    0: (0, 200, 0),    # Green — chemical_structure
+    1: (0, 100, 255),  # Blue  — compound_label
+}
 
 
 def load_default_font(size: int = 28) -> ImageFont.ImageFont:
@@ -33,8 +35,8 @@ def load_default_font(size: int = 28) -> ImageFont.ImageFont:
     return ImageFont.load_default()
 
 
-def parse_yolo_labels(label_path: Path, img_w: int, img_h: int) -> list[tuple[int, int, int, int]]:
-    """Parse a YOLO .txt file and return pixel-space (x1, y1, x2, y2) boxes."""
+def parse_yolo_labels(label_path: Path, img_w: int, img_h: int) -> list[dict]:
+    """Parse a YOLO .txt file and return pixel-space boxes with class IDs."""
     boxes = []
     for line in label_path.read_text().splitlines():
         line = line.strip()
@@ -43,28 +45,32 @@ def parse_yolo_labels(label_path: Path, img_w: int, img_h: int) -> list[tuple[in
         parts = line.split()
         if len(parts) != 5:
             continue
-        _, cx, cy, bw, bh = map(float, parts)
+        class_id, cx, cy, bw, bh = map(float, parts)
         x1 = int((cx - bw / 2) * img_w)
         y1 = int((cy - bh / 2) * img_h)
         x2 = int((cx + bw / 2) * img_w)
         y2 = int((cy + bh / 2) * img_h)
-        boxes.append((x1, y1, x2, y2))
+        boxes.append({"x1": x1, "y1": y1, "x2": x2, "y2": y2, "class_id": int(class_id)})
     return boxes
 
 
-def draw_boxes(img: Image.Image, boxes: list[tuple[int, int, int, int]], font: ImageFont.ImageFont) -> Image.Image:
+def draw_boxes(img: Image.Image, boxes: list[dict], font: ImageFont.ImageFont) -> Image.Image:
     out = img.copy()
     draw = ImageDraw.Draw(out)
 
-    for i, (x1, y1, x2, y2) in enumerate(boxes):
-        draw.rectangle([x1, y1, x2, y2], outline=BOX_COLOR, width=BOX_WIDTH)
+    for i, box in enumerate(boxes):
+        x1, y1, x2, y2 = box["x1"], box["y1"], box["x2"], box["y2"]
+        class_id = box.get("class_id", 0)
+        color = CLASS_COLORS.get(class_id, (255, 0, 0))
+
+        draw.rectangle([x1, y1, x2, y2], outline=color, width=BOX_WIDTH)
 
         # Small index tag at top-left corner of the box
         tag = str(i)
         tb = draw.textbbox((0, 0), tag, font=font)
         tw, th = tb[2] - tb[0] + 6, tb[3] - tb[1] + 4
         tx, ty = x1, max(0, y1 - th)
-        draw.rectangle([tx, ty, tx + tw, ty + th], fill=TAG_BG)
+        draw.rectangle([tx, ty, tx + tw, ty + th], fill=color)
         draw.text((tx + 3, ty + 2), tag, fill=LABEL_COLOR, font=font)
 
     return out

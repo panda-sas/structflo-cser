@@ -54,8 +54,9 @@ class PageConfig:
 
     # Layout
     min_structures: int = 1
-    max_structures: int = 6
-    two_column_prob: float = 0.3
+    max_structures: int = 10
+    two_column_prob: float = 0.25
+    grid_layout_prob: float = 0.20   # 20% chance of uniform grid layout
     grid_jitter: float = 0.12
 
     # Distractors
@@ -74,21 +75,76 @@ class PageConfig:
     brightness_prob: float = 0.40
 
 
+def make_page_config(dpi: int = 300) -> PageConfig:
+    """Return a PageConfig with all pixel dimensions scaled for *dpi*.
+
+    The canonical reference is 300 DPI (A4 = 2480×3508 px).
+    Pass dpi=144 to get a ~1191×1684 px page matching real-world scans.
+    """
+    s = dpi / 300.0
+    return PageConfig(
+        page_w=int(2480 * s),
+        page_h=int(3508 * s),
+        margin=int(180 * s),
+        struct_size_range=(max(60, int(280 * s)), max(100, int(550 * s))),
+        label_font_range=(max(8, int(12 * s)), max(12, int(36 * s))),
+        label_offset_range=(max(3, int(10 * s)), max(6, int(20 * s))),
+    )
+
+
+def make_page_config_slide(dpi: int = 96) -> PageConfig:
+    """Return a PageConfig for landscape 16:9 slide format (PowerPoint/Keynote PDFs).
+
+    Reference: 13.33" × 7.5" at 96 DPI → 1280×720 px.
+    Structures are somewhat smaller relative to portrait A4 since slides
+    pack fewer compounds — more whitespace per structure.
+    """
+    s = dpi / 96.0
+    return PageConfig(
+        page_w=int(1280 * s),
+        page_h=int(720 * s),
+        margin=int(50 * s),
+        struct_size_range=(max(60, int(180 * s)), max(100, int(340 * s))),
+        label_font_range=(max(8, int(10 * s)), max(12, int(26 * s))),
+        label_offset_range=(max(3, int(8 * s)), max(6, int(14 * s))),
+        min_structures=1,
+        max_structures=6,        # slides pack fewer compounds
+        two_column_prob=0.20,
+        grid_layout_prob=0.35,   # grids are common in slide figures
+    )
+
+
+def _rand_prefix(min_len: int = 3, max_len: int = 6) -> str:
+    return "".join(random.choices(string.ascii_uppercase, k=random.randint(min_len, max_len)))
+
+
 LABEL_STYLES = {
-    "alpha_num": lambda: (
-        "".join(random.choices(string.ascii_uppercase, k=random.randint(3, 5)))
-        + "".join(random.choices(string.digits, k=random.randint(3, 5)))
+    # CHEMBL2000, ZINC123456 — well-known DB prefix + 4-7 digits
+    "chembl_like": lambda: (
+        random.choice(["CHEMBL", "PUBCHEM", "ZINC", "MCULE", "ENAMINE"])
+        + str(random.randint(100, 9_999_999))
     ),
-    "compound_num": lambda: f"Compound {random.randint(1, 99)}{random.choice('abcdefg')}",
-    "simple_num": lambda: f"{random.randint(1, 50)}{random.choice(['', 'a', 'b', 'c', 'd'])}",
-    "cas_like": lambda: f"{random.randint(10, 9999)}-{random.randint(10, 99)}-{random.randint(0, 9)}",
-    "internal_dash": lambda: (
-        "".join(random.choices(string.ascii_uppercase, k=2))
-        + "-" + "".join(random.choices(string.digits, k=random.randint(3, 6)))
+    # SACC-33000, MERK-5512 — 3-5 uppercase letters + dash + digits
+    "dash_long": lambda: (
+        _rand_prefix(3, 5) + "-" + str(random.randint(100, 999_999))
     ),
-    "prefix_num": lambda: (
-        random.choice(["CPD", "MOL", "HIT", "REF", "STD", "LIB", "SCR"])
-        + "-" + str(random.randint(1, 99999)).zfill(random.randint(3, 5))
+    # LGNIA55, BXTR2204 — 4-6 uppercase letters directly followed by digits (no dash)
+    "prefix_nodash": lambda: (
+        _rand_prefix(4, 6) + str(random.randint(10, 99999))
+    ),
+    # MERK-22.4.5.6 — prefix + dash + dotted hierarchical number
+    "dotted_hierarchy": lambda: (
+        _rand_prefix(3, 5) + "-"
+        + ".".join(str(random.randint(1, 99)) for _ in range(random.randint(2, 4)))
+    ),
+    # CAS: 50-78-2, 1234-56-7
+    "cas_like": lambda: (
+        f"{random.randint(50, 99999)}-{random.randint(10, 99)}-{random.randint(0, 9)}"
+    ),
+    # Internal catalog: CPD-00123, HIT-04567
+    "catalog": lambda: (
+        random.choice(["CPD", "MOL", "HIT", "REF", "STD", "LIB", "SCR", "CMP", "SYN"])
+        + "-" + str(random.randint(1, 99999)).zfill(5)
     ),
 }
 
@@ -277,37 +333,36 @@ def add_label_near_structure(
     text_w = text_bbox[2] - text_bbox[0]
     text_h = text_bbox[3] - text_bbox[1]
 
-    # 80% chance: place label below and centered
-    if random.random() < 0.8:
-        pos_x = x0 + (x1 - x0 - text_w) // 2  # Center horizontally
-        pos_y = y1 + random.randint(*cfg.label_offset_range)  # Below structure
-        angle = 0.0  # No rotation for centered-below labels
-    else:
-        # 20% chance: random placement around structure (original behavior)
-        directions = [
-            (0, -1),
-            (1, 0),
-            (0, 1),
-            (-1, 0),
-            (1, -1),
-            (-1, -1),
-            (1, 1),
-            (-1, 1),
-        ]
-        dx, dy = random.choice(directions)
-        offset = random.randint(*cfg.label_offset_range)
+    # Label placement: weighted across all four sides
+    # below=50%, above=20%, left=15%, right=15%
+    placement = random.choices(
+        ["below", "above", "left", "right"],
+        weights=[50, 20, 15, 15],
+    )[0]
+    offset = random.randint(*cfg.label_offset_range)
 
-        base_x = x0 + (x1 - x0 - text_w) // 2
-        base_y = y0 + (y1 - y0 - text_h) // 2
-
-        pos_x = base_x + dx * (offset + (x1 - x0) // 2)
-        pos_y = base_y + dy * (offset + (y1 - y0) // 2)
-
+    if placement == "below":
+        pos_x = x0 + (x1 - x0 - text_w) // 2
+        pos_y = y1 + offset
         angle = 0.0
-        if random.random() < cfg.label_90deg_prob:
-            angle = 90.0
-        elif random.random() < cfg.label_rotation_prob:
-            angle = random.uniform(*cfg.label_rotation_range)
+    elif placement == "above":
+        pos_x = x0 + (x1 - x0 - text_w) // 2
+        pos_y = y0 - text_h - offset
+        angle = 0.0
+    elif placement == "left":
+        pos_x = x0 - text_w - offset
+        pos_y = y0 + (y1 - y0 - text_h) // 2
+        angle = 0.0
+    else:  # right
+        pos_x = x1 + offset
+        pos_y = y0 + (y1 - y0 - text_h) // 2
+        angle = 0.0
+
+    # Small chance of rotation on left/right placements (mimics rotated axis labels)
+    if placement in ("left", "right") and random.random() < cfg.label_90deg_prob:
+        angle = 90.0
+    elif random.random() < cfg.label_rotation_prob:
+        angle = random.uniform(*cfg.label_rotation_range)
 
     label_box = draw_rotated_text(page, label, (pos_x, pos_y), font, angle)
     return label_box, label
@@ -487,9 +542,23 @@ def add_rgroup_table(
         draw.line((x0, y0 + j * cell_h, x0 + cols * cell_w, y0 + j * cell_h), fill=(0, 0, 0), width=1)
 
     font = load_font(font_paths, 14)
+    # Mix standard R-group values with ID-like strings (hard negatives for compound_label)
+    cell_choices = [
+        "R1", "R2", "R3", "H", "Me", "Cl", "Br", "F", "OH", "OMe", "NH2", "CF3",
+        "Et", "iPr", "nBu", "Ph", "Bn", "CN", "NO2", "SO2Me",
+        "n/a", ">100", "<0.1", "3.2", "14.5",
+    ]
+    id_choices = [
+        "CHEMBL4051", "ZINC00123", "CPD-00441", "MOL-98231",
+        "HIT-00923", "STD-00001", "MCULE-001", "PUBCHEM44",
+    ]
     for r in range(rows):
         for c in range(cols):
-            txt = random.choice(["R1", "R2", "R3", "H", "Me", "Cl", "Br", "F", "OH", "OMe", "NH2", "CF3"])
+            # Header row or first column: sometimes use an ID as a row key
+            if (r == 0 or c == 0) and random.random() < 0.25:
+                txt = random.choice(id_choices)
+            else:
+                txt = random.choice(cell_choices)
             draw.text((x0 + c * cell_w + 6, y0 + r * cell_h + 6), txt, font=font, fill=(0, 0, 0))
 
 
@@ -978,7 +1047,60 @@ STRAY_FRAGMENTS = [
     "Received: Jan 2025", "Accepted: Mar 2025", "Published online",
     "Supporting Information", "Author Manuscript", "CONFIDENTIAL",
     "Patent WO2025/123456", "© 2025 ACS", "All rights reserved.",
+    # ── Hard negatives: ID-like strings in non-label context ──────────────────
+    # These look like compound labels but appear as stray text, NOT annotated.
+    "See CHEMBL4051 for details", "ZINC00123456 (inactive)",
+    "Ref: PUBCHEM2341157", "cf. MCULE-1234567",
+    "CPD-00441 showed no activity", "data from MOL-98231",
+    "activity vs. ENAMINE-T001", "HIT-00923 excluded",
+    "IC50 values: STD-00001–STD-00010",
+    "Selected from ZINC library", "PUBCHEM CID: 44259",
 ]
+
+
+def make_negative_page(
+    cfg: PageConfig,
+    font_paths: List[Path],
+    distractor_pool: Optional[List[Image.Image]] = None,
+) -> Tuple[Image.Image, List[dict]]:
+    """Generate a page with no chemical structures — pure text/charts.
+
+    Used as hard negatives so the model learns to output nothing when
+    there are no structures present.
+    """
+    page = Image.new("RGB", (cfg.page_w, cfg.page_h), (255, 255, 255))
+    existing_boxes: List[Tuple[int, int, int, int]] = []
+
+    for _ in range(random.randint(3, 6)):
+        add_prose_block(page, cfg, font_paths, existing_boxes)
+    for _ in range(random.randint(3, 6)):
+        add_multiline_text_block(page, cfg, font_paths, existing_boxes)
+    for _ in range(random.randint(1, 4)):
+        add_caption(page, cfg, font_paths, existing_boxes)
+    for _ in range(random.randint(5, 10)):
+        add_stray_text(page, cfg, font_paths, existing_boxes)
+    for _ in range(random.randint(2, 4)):
+        add_equation_fragment(page, cfg, font_paths, existing_boxes)
+    for _ in range(random.randint(1, 3)):
+        add_section_header(page, cfg, font_paths, existing_boxes)
+    for _ in range(random.randint(0, 2)):
+        add_footnote(page, cfg, font_paths, existing_boxes)
+    if random.random() < 0.8:
+        add_journal_header(page, cfg, font_paths, existing_boxes)
+    for _ in range(random.randint(1, 3)):
+        add_rgroup_table(page, cfg, font_paths, existing_boxes)
+    for _ in range(random.randint(0, 2)):
+        add_arrow(page, cfg, existing_boxes)
+    add_page_number(page, cfg, font_paths, existing_boxes)
+
+    if distractor_pool:
+        n_images = random.randint(2, 5)
+    else:
+        n_images = random.randint(1, 4)
+    for _ in range(n_images):
+        add_random_image(page, cfg, existing_boxes, distractor_pool)
+
+    return page, []  # empty panels — no annotations
 
 
 def make_page(
@@ -995,9 +1117,27 @@ def make_page(
     n_structures = random.randint(cfg.min_structures, cfg.max_structures)
     random.shuffle(smiles_pool)
 
-    # Two-column layout: split page vertically, alternate structures left/right
-    two_column = random.random() < cfg.two_column_prob and n_structures >= 2
-    if two_column:
+    # Choose layout mode
+    layout_roll = random.random()
+    use_grid = layout_roll < cfg.grid_layout_prob and n_structures >= 4
+    two_column = (not use_grid) and layout_roll < cfg.grid_layout_prob + cfg.two_column_prob and n_structures >= 2
+
+    if use_grid:
+        # Uniform grid: pick cols × rows that fits n_structures
+        cols = random.choice([2, 3, 4])
+        rows = (n_structures + cols - 1) // cols
+        usable_w = cfg.page_w - 2 * cfg.margin
+        usable_h = cfg.page_h - 2 * cfg.margin
+        cell_w = usable_w // cols
+        cell_h = usable_h // rows
+        grid_positions = [
+            (cfg.margin + c * cell_w, cfg.margin + r * cell_h,
+             cfg.margin + (c + 1) * cell_w, cfg.margin + (r + 1) * cell_h)
+            for r in range(rows) for c in range(cols)
+        ]
+        col_x_ranges = None
+        col_y_range = None
+    elif two_column:
         col_gap = 60
         mid = cfg.page_w // 2
         col_x_ranges = [
@@ -1005,17 +1145,27 @@ def make_page(
             (mid + col_gap // 2, cfg.page_w - cfg.margin),
         ]
         col_y_range = (cfg.margin, cfg.page_h - cfg.margin)
+        grid_positions = None
     else:
         col_x_ranges = None
         col_y_range = None
+        grid_positions = None
 
+    grid_idx = 0
     for smi in smiles_pool[: n_structures * 2]:
         size = random.randint(*cfg.struct_size_range)
         struct_img = render_structure(smi, size, cfg)
         if struct_img is None:
             continue
 
-        if two_column:
+        if use_grid and grid_positions and grid_idx < len(grid_positions):
+            gx0, gy0, gx1, gy1 = grid_positions[grid_idx]
+            box = place_structure(
+                page, struct_img, cfg, existing_boxes,
+                x_range=(gx0, gx1), y_range=(gy0, gy1),
+            )
+            grid_idx += 1
+        elif two_column:
             assert col_x_ranges is not None
             col = len(panels) % 2
             box = place_structure(
@@ -1093,13 +1243,13 @@ def make_page(
     return page, panels
 
 
-def yolo_label(box: Tuple[int, int, int, int], w: int, h: int) -> str:
+def yolo_label(box: Tuple[int, int, int, int], w: int, h: int, class_id: int = 0) -> str:
     x0, y0, x1, y1 = box
     cx = (x0 + x1) / 2.0 / w
     cy = (y0 + y1) / 2.0 / h
     bw = (x1 - x0) / w
     bh = (y1 - y0) / h
-    return f"0 {cx:.6f} {cy:.6f} {bw:.6f} {bh:.6f}"
+    return f"{class_id} {cx:.6f} {cy:.6f} {bw:.6f} {bh:.6f}"
 
 
 def find_fonts(fonts_dir: Optional[Path]) -> List[Path]:
@@ -1119,8 +1269,12 @@ def save_sample(
     out_gt: Path,
     fmt: str,
     cfg: PageConfig,
+    grayscale: bool = False,
 ) -> None:
     page = apply_noise(page, cfg)
+
+    if grayscale:
+        page = page.convert("L").convert("RGB")  # keep 3-ch for YOLO compatibility
 
     if fmt.lower() == "jpg":
         page.save(out_img, format="JPEG", quality=random.randint(60, 90))
@@ -1132,19 +1286,16 @@ def save_sample(
     for p in panels:
         sb = p["struct_box"]
         lb = p["label_box"]
+        struct_box = clamp_box(sb, cfg.page_w, cfg.page_h)
+        yolo_lines.append(yolo_label(struct_box, cfg.page_w, cfg.page_h, class_id=0))
         if lb is not None:
-            union = clamp_box(
-                (min(sb[0], lb[0]), min(sb[1], lb[1]),
-                 max(sb[2], lb[2]), max(sb[3], lb[3])),
-                cfg.page_w, cfg.page_h,
-            )
+            label_box = clamp_box(lb, cfg.page_w, cfg.page_h)
+            yolo_lines.append(yolo_label(label_box, cfg.page_w, cfg.page_h, class_id=1))
         else:
-            union = clamp_box(sb, cfg.page_w, cfg.page_h)
-        yolo_lines.append(yolo_label(union, cfg.page_w, cfg.page_h))
+            label_box = None
         gt_records.append({
-            "union_bbox":  list(union),
-            "struct_bbox": list(sb),
-            "label_bbox":  list(lb) if lb is not None else None,
+            "struct_bbox": list(struct_box),
+            "label_bbox":  list(label_box) if label_box is not None else None,
             "label_text":  p["label_text"],
             "smiles":      p["smiles"],
         })
@@ -1162,11 +1313,15 @@ def generate_dataset(
     fmt: str,
     fonts_dir: Optional[Path],
     distractors_dir: Optional[Path] = None,
+    dpi_choices: Optional[List[int]] = None,
+    grayscale: bool = False,
 ) -> None:
     random.seed(seed)
     np.random.seed(seed)
 
-    cfg = PageConfig()
+    if dpi_choices is None:
+        dpi_choices = [300]
+
     smiles_pool = load_smiles(smiles_csv)
     font_paths = find_fonts(fonts_dir)
 
@@ -1176,6 +1331,8 @@ def generate_dataset(
         print(f"Loaded {len(distractor_pool)} distractor images from {distractors_dir}")
     else:
         print("No distractor images found — using only synthetic generators.")
+
+    print(f"DPI choices: {dpi_choices}  |  Grayscale: {grayscale}")
 
     train_img_dir = out_dir / "train" / "images"
     train_lbl_dir = out_dir / "train" / "labels"
@@ -1190,11 +1347,22 @@ def generate_dataset(
 
     def run_split(count: int, img_dir: Path, lbl_dir: Path, gt_dir: Path, split: str) -> None:
         for i in tqdm(range(count), desc=f"Generating {split}"):
-            page, panels = make_page(smiles_pool, cfg, font_paths, distractor_pool)
+            dpi = random.choice(dpi_choices)
+            # 20% of pages are landscape slides (PowerPoint/Keynote PDFs).
+            # Cap slide DPI at 200 — slide PDFs are rarely rendered above that.
+            if random.random() < 0.20:
+                cfg = make_page_config_slide(min(dpi, 200))
+            else:
+                cfg = make_page_config(dpi)
+            # 15% negative pages (no structures) — hard negatives
+            if random.random() < 0.15:
+                page, panels = make_negative_page(cfg, font_paths, distractor_pool)
+            else:
+                page, panels = make_page(smiles_pool, cfg, font_paths, distractor_pool)
             img_path = img_dir / f"{split}_{i:06d}.{fmt}"
             lbl_path = lbl_dir / f"{split}_{i:06d}.txt"
             gt_path  = gt_dir  / f"{split}_{i:06d}.json"
-            save_sample(page, panels, img_path, lbl_path, gt_path, fmt, cfg)
+            save_sample(page, panels, img_path, lbl_path, gt_path, fmt, cfg, grayscale)
 
     run_split(num_train, train_img_dir, train_lbl_dir, train_gt_dir, "train")
     run_split(num_val, val_img_dir, val_lbl_dir, val_gt_dir, "val")
@@ -1235,6 +1403,20 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Directory of distractor images (downloaded via download_distractor_images.py)",
     )
+    parser.add_argument(
+        "--dpi",
+        default="96,144,200,300",
+        help="Comma-separated DPI values to randomly sample per page (default: 96,144,200,300). "
+             "Slide pages are capped at 200 DPI internally regardless of this setting.",
+    )
+    parser.add_argument(
+        "--grayscale",
+        action="store_true",
+        default=True,
+        help="Convert pages to grayscale before saving (default: True). "
+             "Use --no-grayscale to keep colour.",
+    )
+    parser.add_argument("--no-grayscale", dest="grayscale", action="store_false")
     return parser.parse_args()
 
 
@@ -1245,6 +1427,8 @@ def main() -> int:
         print(f"SMILES CSV not found: {args.smiles}")
         return 1
 
+    dpi_choices = [int(d.strip()) for d in args.dpi.split(",")]
+
     generate_dataset(
         smiles_csv=args.smiles,
         out_dir=args.out,
@@ -1254,6 +1438,8 @@ def main() -> int:
         fmt=args.format,
         fonts_dir=args.fonts_dir,
         distractors_dir=args.distractors_dir,
+        dpi_choices=dpi_choices,
+        grayscale=args.grayscale,
     )
 
     print(f"\nDone. Dataset saved under {args.out}")

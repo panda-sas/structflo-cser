@@ -24,8 +24,8 @@ RUNS_DIR = ROOT / "runs" / "labels_detect"
 def train(
     weights: str = "yolo11l.pt",
     imgsz: int = 1280,
-    batch: int = 16,
-    epochs: int = 150,
+    batch: int = 8,
+    epochs: int = 50,
     resume: str | None = None,
 ) -> None:
     model = YOLO(resume if resume else weights)
@@ -34,7 +34,7 @@ def train(
         data=str(DATA_YAML),
 
         epochs=epochs,
-        patience=30,
+        patience=10,
         batch=batch,
         imgsz=imgsz,
 
@@ -45,10 +45,10 @@ def train(
         warmup_epochs=5,
         cos_lr=True,
 
-        # Document augmentation — conservative, no spatial nonsense
-        hsv_h=0.005,      # tiny hue shift (docs are mostly greyscale)
-        hsv_s=0.3,
-        hsv_v=0.3,
+        # Document augmentation — grayscale training data, disable colour ops
+        hsv_h=0.0,        # no hue shift (grayscale images, meaningless)
+        hsv_s=0.0,        # no saturation shift (grayscale)
+        hsv_v=0.1,        # slight brightness jitter still useful
         degrees=3.0,      # slight rotation (scanned page tilt)
         translate=0.1,
         scale=0.3,        # important: bridges train (1280) vs inference (1536 tile) scale gap
@@ -91,9 +91,9 @@ def main() -> None:
     p.add_argument("--imgsz", type=int, default=1280,
                    help="Training image size. 1280 is fine — compound panels are 200-350px "
                         "at this scale, well above detection threshold.")
-    p.add_argument("--batch", type=int, default=16,
-                   help="Batch size. 16 is safe for A6000 48GB at imgsz=1280.")
-    p.add_argument("--epochs", type=int, default=150)
+    p.add_argument("--batch", type=int, default=8,
+                   help="Batch size. 8 is safe for A6000 48GB at imgsz=1280.")
+    p.add_argument("--epochs", type=int, default=50)
     p.add_argument("--resume", default=None,
                    help="Path to last.pt to resume an interrupted run.")
     args = p.parse_args()
