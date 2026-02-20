@@ -16,6 +16,7 @@ import argparse
 import csv
 import json
 import math
+import multiprocessing as mp
 import os
 import random
 import string
@@ -1494,6 +1495,41 @@ def save_sample(
     out_gt.write_text(json.dumps(gt_records, indent=2))
 
 
+# ---------------------------------------------------------------------------
+# Multiprocessing helpers
+# ---------------------------------------------------------------------------
+# Module-level state inherited by forked workers (Linux COW-safe).
+_mp_smiles: List[str] = []
+_mp_fonts: List[Path] = []
+_mp_distractors: List[Image.Image] = []
+
+
+def _generate_one_page(args: tuple) -> None:
+    """Worker function: generate and save a single page."""
+    (i, split, img_dir, lbl_dir, gt_dir, fmt,
+     dpi_choices, grayscale, page_seed) = args
+
+    # Per-page deterministic seeding
+    random.seed(page_seed)
+    np.random.seed(page_seed % (2**32))
+
+    dpi = random.choice(dpi_choices)
+    if random.random() < 0.20:
+        cfg = make_page_config_slide(min(dpi, 200))
+    else:
+        cfg = make_page_config(dpi)
+
+    if random.random() < 0.15:
+        page, panels = make_negative_page(cfg, _mp_fonts, _mp_distractors)
+    else:
+        page, panels = make_page(_mp_smiles, cfg, _mp_fonts, _mp_distractors)
+
+    img_path = Path(img_dir) / f"{split}_{i:06d}.{fmt}"
+    lbl_path = Path(lbl_dir) / f"{split}_{i:06d}.txt"
+    gt_path  = Path(gt_dir)  / f"{split}_{i:06d}.json"
+    save_sample(page, panels, img_path, lbl_path, gt_path, fmt, cfg, grayscale)
+
+
 def generate_dataset(
     smiles_csv: Path,
     out_dir: Path,
@@ -1505,6 +1541,7 @@ def generate_dataset(
     distractors_dir: Optional[Path] = None,
     dpi_choices: Optional[List[int]] = None,
     grayscale: bool = False,
+    workers: int = 0,
 ) -> None:
     random.seed(seed)
     np.random.seed(seed)
@@ -1522,7 +1559,8 @@ def generate_dataset(
     else:
         print("No distractor images found — using only synthetic generators.")
 
-    print(f"DPI choices: {dpi_choices}  |  Grayscale: {grayscale}")
+    effective_workers = workers if workers > 0 else mp.cpu_count()
+    print(f"DPI choices: {dpi_choices}  |  Grayscale: {grayscale}  |  Workers: {effective_workers}")
 
     train_img_dir = out_dir / "train" / "images"
     train_lbl_dir = out_dir / "train" / "labels"
@@ -1535,27 +1573,54 @@ def generate_dataset(
               val_img_dir, val_lbl_dir, val_gt_dir):
         d.mkdir(parents=True, exist_ok=True)
 
-    def run_split(count: int, img_dir: Path, lbl_dir: Path, gt_dir: Path, split: str) -> None:
-        for i in tqdm(range(count), desc=f"Generating {split}"):
-            dpi = random.choice(dpi_choices)
-            # 20% of pages are landscape slides (PowerPoint/Keynote PDFs).
-            # Cap slide DPI at 200 — slide PDFs are rarely rendered above that.
-            if random.random() < 0.20:
-                cfg = make_page_config_slide(min(dpi, 200))
-            else:
-                cfg = make_page_config(dpi)
-            # 15% negative pages (no structures) — hard negatives
-            if random.random() < 0.15:
-                page, panels = make_negative_page(cfg, font_paths, distractor_pool)
-            else:
-                page, panels = make_page(smiles_pool, cfg, font_paths, distractor_pool)
-            img_path = img_dir / f"{split}_{i:06d}.{fmt}"
-            lbl_path = lbl_dir / f"{split}_{i:06d}.txt"
-            gt_path  = gt_dir  / f"{split}_{i:06d}.json"
-            save_sample(page, panels, img_path, lbl_path, gt_path, fmt, cfg, grayscale)
+    if effective_workers <= 1:
+        # ---- sequential (original behaviour) ----
+        def run_split(count: int, img_dir: Path, lbl_dir: Path, gt_dir: Path, split: str) -> None:
+            for i in tqdm(range(count), desc=f"Generating {split}"):
+                dpi = random.choice(dpi_choices)
+                if random.random() < 0.20:
+                    cfg = make_page_config_slide(min(dpi, 200))
+                else:
+                    cfg = make_page_config(dpi)
+                if random.random() < 0.15:
+                    page, panels = make_negative_page(cfg, font_paths, distractor_pool)
+                else:
+                    page, panels = make_page(smiles_pool, cfg, font_paths, distractor_pool)
+                img_path = img_dir / f"{split}_{i:06d}.{fmt}"
+                lbl_path = lbl_dir / f"{split}_{i:06d}.txt"
+                gt_path  = gt_dir  / f"{split}_{i:06d}.json"
+                save_sample(page, panels, img_path, lbl_path, gt_path, fmt, cfg, grayscale)
 
-    run_split(num_train, train_img_dir, train_lbl_dir, train_gt_dir, "train")
-    run_split(num_val, val_img_dir, val_lbl_dir, val_gt_dir, "val")
+        run_split(num_train, train_img_dir, train_lbl_dir, train_gt_dir, "train")
+        run_split(num_val, val_img_dir, val_lbl_dir, val_gt_dir, "val")
+    else:
+        # ---- parallel (fork-based, Linux COW-safe) ----
+        global _mp_smiles, _mp_fonts, _mp_distractors
+        _mp_smiles = smiles_pool
+        _mp_fonts = font_paths
+        _mp_distractors = distractor_pool
+
+        def run_split_parallel(
+            count: int, img_dir: Path, lbl_dir: Path, gt_dir: Path,
+            split: str, base_seed: int,
+        ) -> None:
+            tasks = [
+                (i, split, str(img_dir), str(lbl_dir), str(gt_dir),
+                 fmt, dpi_choices, grayscale, base_seed + i)
+                for i in range(count)
+            ]
+            with mp.Pool(processes=effective_workers) as pool:
+                for _ in tqdm(
+                    pool.imap_unordered(_generate_one_page, tasks, chunksize=8),
+                    total=count,
+                    desc=f"Generating {split}",
+                ):
+                    pass
+
+        run_split_parallel(num_train, train_img_dir, train_lbl_dir, train_gt_dir,
+                           "train", seed)
+        run_split_parallel(num_val, val_img_dir, val_lbl_dir, val_gt_dir,
+                           "val", seed + num_train)
 
 
 def parse_args() -> argparse.Namespace:
@@ -1607,6 +1672,13 @@ def parse_args() -> argparse.Namespace:
              "Use --no-grayscale to keep colour.",
     )
     parser.add_argument("--no-grayscale", dest="grayscale", action="store_false")
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=0,
+        help="Number of parallel worker processes (default: 0 = all CPUs). "
+             "Use 1 to disable multiprocessing.",
+    )
     return parser.parse_args()
 
 
@@ -1630,6 +1702,7 @@ def main() -> int:
         distractors_dir=args.distractors_dir,
         dpi_choices=dpi_choices,
         grayscale=args.grayscale,
+        workers=args.workers,
     )
 
     print(f"\nDone. Dataset saved under {args.out}")

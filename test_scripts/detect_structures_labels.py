@@ -20,7 +20,7 @@ from scipy.optimize import linear_sum_assignment
 from ultralytics import YOLO
 
 ROOT = Path(__file__).parent.parent
-DEFAULT_WEIGHTS = ROOT / "runs" / "labels_detect" / "yolo11l_panels" / "weights" / "last.pt"
+DEFAULT_WEIGHTS = ROOT / "runs" / "labels_detect" / "yolo11l_panels" / "weights" / "best.pt"
 
 CLASS_NAMES  = {0: "structure", 1: "label"}
 CLASS_COLORS = {0: (0, 200, 0), 1: (0, 100, 255)}  # green, blue
