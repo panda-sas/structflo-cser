@@ -9,14 +9,15 @@ dependencies = [
     "decimer>=2.8.0",
     "flask>=3.1.3",
     "matplotlib>=3.10.8",
+    "easyocr>=1.7",
     "numpy>=2.4.2",
     "opencv-python-headless>=4.13.0.92",
-    "paddleocr>=3.4.0",
     "pillow>=12.1.1",
     "pymupdf>=1.27.1",
     "rdkit>=2025.9.5",
     "requests>=2.31.0",
     "scipy>=1.17.0",
+    "pandas>=2.0.0",
     "tqdm>=4.67.3",
     "ultralytics>=8.4.14",
 ]
@@ -29,6 +30,7 @@ sl-detect               = "struct_labels.inference.detector:main"
 sl-viz                  = "struct_labels.viz.labels:main"
 sl-download-distractors = "struct_labels.data.distractor_images:main"
 sl-annotate             = "annotate.__main__:main"
+sl-extract              = "struct_labels.pipeline.cli:main"
 
 [build-system]
 requires = ["hatchling"]
