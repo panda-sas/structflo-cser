@@ -254,8 +254,8 @@ def main() -> int:
     parser.add_argument("--seed", type=int, default=7, help="Random seed")
     parser.add_argument("--format", choices=["jpg", "png"], default="jpg",
                         help="Image format")
-    parser.add_argument("--fonts-dir", type=Path, default=None,
-                        help="Optional directory of .ttf/.otf fonts")
+    parser.add_argument("--fonts-dir", type=Path, default=Path("data/fonts"),
+                        help="Directory of .ttf/.otf fonts (default: data/fonts)")
     parser.add_argument("--distractors-dir", type=Path, default=None,
                         help="Directory of distractor images")
     parser.add_argument("--dpi", default="96,144,200,300",

@@ -59,7 +59,15 @@ def load_font(font_paths: List[Path], size: int, prefer_bold: bool = False) -> I
     """
     paths = list(font_paths)
     if prefer_bold:
-        bold_paths = [p for p in paths if "bold" in p.name.lower()]
+        # Match common bold-weight naming patterns across font families:
+        #   *-Bold.ttf, *-Bd*.ttf, *-B.ttf (Ubuntu), *-Demi*.otf (URW),
+        #   *-Heavy*, *-Black*, *-SemiBold*, *-ExtraBold*
+        import re as _re
+        _BOLD_PAT = _re.compile(
+            r"(bold|[-_]bd[-_]?|[-_]b\.ttf|demi|heavy|black|semibold|extrabold)",
+            _re.IGNORECASE,
+        )
+        bold_paths = [p for p in paths if _BOLD_PAT.search(p.name)]
         if bold_paths:
             paths = bold_paths
     random.shuffle(paths)
