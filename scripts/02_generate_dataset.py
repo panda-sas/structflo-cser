@@ -167,36 +167,50 @@ def load_smiles(csv_path: Path) -> List[str]:
 
 
 def render_structure(smiles: str, size: int, cfg: PageConfig) -> Optional[Image.Image]:
+    """Render a 2-D chemical structure from a SMILES string.
+
+    Uses RDKit's Cairo drawer to produce a transparent-background RGBA image,
+    then tight-crops around the drawn atoms/bonds so there's no excess whitespace.
+
+    Returns None if the SMILES is invalid or produces no visible drawing.
+    """
+    # Parse the SMILES into an RDKit molecule object.
     mol = Chem.MolFromSmiles(smiles)
     if mol is None:
         return None
     try:
+        # Generate 2-D coordinates for drawing.
         AllChem.Compute2DCoords(mol)
     except Exception:
         return None
 
+    # Set up the Cairo-based drawer at the requested pixel size.
     drawer = rdMolDraw2D.MolDraw2DCairo(size, size)
     opts = drawer.drawOptions()
-    opts.bondLineWidth = random.uniform(*cfg.bond_width_range)
-    opts.minFontSize = random.randint(*cfg.atom_font_range)
+    opts.bondLineWidth = random.uniform(*cfg.bond_width_range)    # vary line thickness
+    opts.minFontSize = random.randint(*cfg.atom_font_range)       # vary atom-label size
     opts.maxFontSize = opts.minFontSize + 8
-    opts.additionalAtomLabelPadding = random.uniform(0.05, 0.2)
-    opts.rotate = random.uniform(0, 360)
+    opts.additionalAtomLabelPadding = random.uniform(0.05, 0.2)   # breathing room around labels
+    opts.rotate = random.uniform(0, 360)                          # random orientation
     if random.random() < 0.3:
-        opts.useBWAtomPalette()
+        opts.useBWAtomPalette()  # 30 % chance: all-black atoms (no colour)
 
     drawer.DrawMolecule(mol)
     drawer.FinishDrawing()
 
+    # Read the rendered PNG bytes into a Pillow RGBA image.
     img = Image.open(BytesIO(drawer.GetDrawingText())).convert("RGBA")
     arr = np.array(img)
 
+    # Build a mask of "meaningful" pixels: non-transparent AND not pure white.
+    # This lets us tight-crop the structure, discarding the white canvas.
     mask = (arr[:, :, 3] > 0) & (
         (arr[:, :, 0] < 250) | (arr[:, :, 1] < 250) | (arr[:, :, 2] < 250)
     )
     if not mask.any():
         return None
 
+    # Find the bounding rectangle of the drawn content and crop.
     ys, xs = np.where(mask)
     y0, y1 = ys.min(), ys.max()
     x0, x1 = xs.min(), xs.max()
@@ -206,17 +220,23 @@ def render_structure(smiles: str, size: int, cfg: PageConfig) -> Optional[Image.
 
 
 def load_font(font_paths: List[Path], size: int, prefer_bold: bool = False) -> ImageFont.ImageFont:
+    """Pick a random font from *font_paths* at the given pixel *size*.
+
+    If *prefer_bold* is True, only bold-named fonts are considered (if any).
+    Falls back to DejaVuSans or Pillow's built-in default on failure.
+    """
     paths = list(font_paths)
     if prefer_bold:
         bold_paths = [p for p in paths if "bold" in p.name.lower()]
         if bold_paths:
             paths = bold_paths
-    random.shuffle(paths)
+    random.shuffle(paths)  # randomise so each call picks a different typeface
     for path in paths:
         try:
             return ImageFont.truetype(str(path), size=size)
         except Exception:
             continue
+    # Fallback chain: system DejaVuSans -> Pillow bitmap default.
     try:
         return ImageFont.truetype("DejaVuSans.ttf", size=size)
     except Exception:
@@ -232,57 +252,122 @@ def draw_rotated_text(
     fill: Tuple[int, int, int] = (0, 0, 0),
     bg_color: Optional[Tuple[int, int, int]] = None,
 ) -> Tuple[int, int, int, int]:
-    draw = ImageDraw.Draw(base)
-    text_bbox = draw.textbbox((0, 0), text, font=font)
-    text_w = text_bbox[2] - text_bbox[0]
-    text_h = text_bbox[3] - text_bbox[1]
+    """Render *text* onto *base* at the given centre-point, optionally rotated.
 
-    # annotation_margin: pixels of padding around the text in the final bbox.
-    # canvas_padding must be >= annotation_margin so the tight-bbox search
-    # never clamps against the canvas edge.
-    annotation_margin = 10
+    Parameters
+    ----------
+    base : Image
+        The page image to draw on (modified in-place).
+    text : str
+        The label string to render.
+    position : (cx, cy)
+        The **centre** of the desired label position on the page.
+    font : ImageFont
+        Pillow font object to use for rendering.
+    angle : float
+        Counter-clockwise rotation in degrees (0 = horizontal).
+    fill : (R, G, B)
+        Text colour.
+    bg_color : (R, G, B) or None
+        If given, a filled rectangle of this colour is drawn behind the text
+        (e.g. dark background with light text).
+
+    Returns
+    -------
+    (x0, y0, x1, y1) — tight bounding box of the rendered label on *base*,
+    padded by `annotation_margin` pixels on each side.
+    """
+    draw = ImageDraw.Draw(base)
+
+    # --- Step 1: Measure the text ------------------------------------------
+    # textbbox returns (left, top, right, bottom) for the given string.
+    # Note: left/top may be non-zero because of font metrics (ascent offset),
+    # so we subtract them to get the true glyph width/height.
+    text_bbox = draw.textbbox((0, 0), text, font=font)
+    text_w = text_bbox[2] - text_bbox[0]   # pixel width of the text glyphs
+    text_h = text_bbox[3] - text_bbox[1]   # pixel height of the text glyphs
+
+    # --- Step 2: Determine canvas padding -----------------------------------
+    # We draw the text on a temporary transparent canvas, then rotate it.
+    #   • annotation_margin : extra pixels kept around the text in the final
+    #     returned bounding box (so the YOLO bbox is not skin-tight).
+    #   • canvas_padding : extra transparent border around the text on the
+    #     temporary canvas.  Must be >= annotation_margin so the tight-bbox
+    #     scan (step 6) never bumps into the canvas edge.
+    #     For rotated text the diagonal is larger, so we add more padding.
+    annotation_margin = 7
     if abs(angle) < 0.5:
+        # No rotation: a small border is enough.
         canvas_padding = annotation_margin + 2
     else:
+        # Rotation: corners sweep outward by (diag − short_side)/2.
         diag = int(np.hypot(text_w, text_h))
         canvas_padding = (diag - min(text_w, text_h)) // 2 + annotation_margin + 4
 
     padded_w = text_w + 2 * canvas_padding
     padded_h = text_h + 2 * canvas_padding
 
+    # --- Step 3: Create a temporary RGBA canvas and draw text ---------------
+    # The canvas is fully transparent; only the text (and optional bg rect)
+    # will have non-zero alpha — this lets us composite and measure later.
     text_img = Image.new("RGBA", (padded_w, padded_h), (255, 255, 255, 0))
     text_draw = ImageDraw.Draw(text_img)
 
+    # The text draw origin inside the canvas, compensating for font offsets.
+    # Pillow's textbbox((0,0), ...) returns (left, top, right, bottom) where
+    # left/top are the font-metric offsets from the anchor.  By subtracting
+    # them we ensure the actual glyph pixels land at (canvas_padding, canvas_padding).
+    tx = canvas_padding - text_bbox[0]
+    ty = canvas_padding - text_bbox[1]
+
+    # Glyph pixel extent on the canvas (independent of font-metric offsets).
+    glyph_x0 = canvas_padding
+    glyph_y0 = canvas_padding
+    glyph_x1 = canvas_padding + text_w
+    glyph_y1 = canvas_padding + text_h
+
     if bg_color is not None:
-        # Draw a filled background rectangle tightly around the text glyphs
-        tx = canvas_padding - text_bbox[0]
-        ty = canvas_padding - text_bbox[1]
+        # Draw a filled background rectangle centred on the actual glyph area.
+        # IMPORTANT: we use glyph coordinates, NOT (tx, ty), because those
+        # include the font-metric offsets.  Using (tx ± bg_pad) would shift
+        # the rect left/up, clipping white text on the right/bottom edges
+        # (invisible against a white page).
         bg_pad = 4
         text_draw.rectangle(
-            [tx - bg_pad, ty - bg_pad, tx + text_w + bg_pad, ty + text_h + bg_pad],
+            [glyph_x0 - bg_pad, glyph_y0 - bg_pad,
+             glyph_x1 + bg_pad, glyph_y1 + bg_pad],
             fill=bg_color + (255,),
         )
 
-    text_draw.text((canvas_padding - text_bbox[0], canvas_padding - text_bbox[1]),
-                   text, font=font, fill=fill + (255,))
+    # Draw the actual text on top of the (optional) background rectangle.
+    text_draw.text((tx, ty), text, font=font, fill=fill + (255,))
 
+    # --- Step 4: Rotate the temporary canvas --------------------------------
+    # expand=True grows the output image so nothing is cropped during rotation.
     rotated = text_img.rotate(angle, expand=True)
 
-    # Centre the rotated image on the requested position
+    # --- Step 5: Paste the rotated label centred on `position` --------------
+    # `position` is the desired centre-point on the page, so we shift left/up
+    # by half the rotated image dimensions, then clamp to stay on the page.
     cx, cy = position
     page_w, page_h = base.size
     x0 = cx - rotated.size[0] // 2
     y0 = cy - rotated.size[1] // 2
-    x0 = max(0, min(x0, page_w - rotated.size[0]))
-    y0 = max(0, min(y0, page_h - rotated.size[1]))
+    x0 = max(0, min(x0, page_w - rotated.size[0]))  # clamp horizontally
+    y0 = max(0, min(y0, page_h - rotated.size[1]))  # clamp vertically
 
+    # Composite onto the page using the alpha channel as mask.
     base.paste(rotated, (x0, y0), rotated)
 
-    # Tight bbox: find non-transparent pixel extents, add annotation_margin.
-    # canvas_padding >= annotation_margin ensures no clamping against canvas edge.
+    # --- Step 6: Compute tight bounding box on the page ---------------------
+    # Scan the alpha channel of the (possibly rotated) canvas to find the
+    # non-transparent extent, then add annotation_margin on each side.
+    # Because canvas_padding >= annotation_margin, subtracting annotation_margin
+    # from the min coordinates will never go below 0 (so the bbox is valid).
     alpha = np.array(rotated)[:, :, 3]
     ys, xs = np.where(alpha > 10)
     if len(ys) == 0:
+        # Fallback: the whole rotated canvas region (shouldn't normally happen).
         return (x0, y0, x0 + rotated.size[0], y0 + rotated.size[1])
     bx0 = max(0, xs.min() - annotation_margin)
     by0 = max(0, ys.min() - annotation_margin)
@@ -292,6 +377,7 @@ def draw_rotated_text(
 
 
 def clamp_box(box: Tuple[int, int, int, int], w: int, h: int) -> Tuple[int, int, int, int]:
+    """Clamp a bounding box so it stays within the page (0,0)-(w,h)."""
     x0, y0, x1, y1 = box
     x0 = max(0, min(x0, w - 1))
     y0 = max(0, min(y0, h - 1))
@@ -301,6 +387,7 @@ def clamp_box(box: Tuple[int, int, int, int], w: int, h: int) -> Tuple[int, int,
 
 
 def boxes_intersect(a: Tuple[int, int, int, int], b: Tuple[int, int, int, int]) -> bool:
+    """Return True if axis-aligned boxes *a* and *b* overlap at all."""
     return not (a[2] <= b[0] or a[0] >= b[2] or a[3] <= b[1] or a[1] >= b[3])
 
 
@@ -313,29 +400,38 @@ def place_structure(
     x_range: Optional[Tuple[int, int]] = None,
     y_range: Optional[Tuple[int, int]] = None,
 ) -> Optional[Tuple[int, int, int, int]]:
-    w, h = page.size
-    sw, sh = struct_img.size
+    """Try to paste *struct_img* onto *page* without overlapping existing boxes.
 
+    Randomly samples positions within the allowed region (x_range/y_range or
+    page margins) up to *max_tries* times.  Returns the (x0,y0,x1,y1) box on
+    success, or None if no free position was found.
+    """
+    w, h = page.size
+    sw, sh = struct_img.size  # structure image dimensions
+
+    # Determine the allowed placement rectangle.
     x_lo = x_range[0] if x_range else cfg.margin
     x_hi = (x_range[1] - sw) if x_range else (w - cfg.margin - sw)
     y_lo = y_range[0] if y_range else cfg.margin
     y_hi = (y_range[1] - sh) if y_range else (h - cfg.margin - sh)
 
     if x_lo >= x_hi or y_lo >= y_hi:
-        return None
+        return None  # structure doesn't fit in the allowed region
 
     for _ in range(max_tries):
         x = random.randint(x_lo, x_hi)
         y = random.randint(y_lo, y_hi)
         box = (x, y, x + sw, y + sh)
+        # Pad the candidate box by 6 px on each side to keep a gap.
         padded = (x - 6, y - 6, x + sw + 6, y + sh + 6)
 
         if any(boxes_intersect(padded, b) for b in existing_boxes):
-            continue
+            continue  # overlaps — try again
 
+        # Found a free spot: composite the structure onto the page.
         page.paste(struct_img, (x, y), struct_img)
         return box
-    return None
+    return None  # exhausted attempts
 
 
 def add_label_near_structure(
@@ -344,51 +440,78 @@ def add_label_near_structure(
     cfg: PageConfig,
     font_paths: List[Path],
 ) -> Tuple[Tuple[int, int, int, int], str]:
+    """Place a randomly-generated compound label next to *struct_box*.
+
+    The label is positioned on a randomly chosen side of the structure
+    (below / above / left / right) and may optionally be rotated and/or
+    drawn with a dark background behind light text.
+
+    Returns
+    -------
+    (label_bbox, label_text)
+        label_bbox : (x0, y0, x1, y1) on the page after rendering.
+        label_text : the string that was drawn.
+    """
     w, h = page.size
-    label = random_label()
+    label = random_label()  # e.g. "CHEMBL12345" or "CPD-00042"
+
+    # Pick a random font size within the configured range, optionally bold.
     font_size = random.randint(*cfg.label_font_range)
     use_bold = random.random() < 0.5
     font = load_font(font_paths, font_size, prefer_bold=use_bold)
 
-    x0, y0, x1, y1 = struct_box
+    x0, y0, x1, y1 = struct_box  # bounding box of the chemical structure
 
+    # Measure the text so we can compute placement coordinates.
     draw = ImageDraw.Draw(page)
     text_bbox = draw.textbbox((0, 0), label, font=font)
-    text_w = text_bbox[2] - text_bbox[0]
-    text_h = text_bbox[3] - text_bbox[1]
+    text_w = text_bbox[2] - text_bbox[0]   # glyph width
+    text_h = text_bbox[3] - text_bbox[1]   # glyph height
 
-    # Label placement: weighted across all four sides
-    # below=50%, above=20%, left=15%, right=15%
+    # --- Choose which side of the structure the label goes on ---------------
+    # Weighted random: below is most common (mimics real papers).
     placement = random.choices(
         ["below", "above", "left", "right"],
         weights=[50, 20, 15, 15],
     )[0]
-    offset = random.randint(*cfg.label_offset_range)
+    offset = random.randint(*cfg.label_offset_range)  # gap between struct and label
+
+    # Compute the *centre* of the label for each placement.
+    # draw_rotated_text() expects a centre point (cx, cy), NOT a top-left corner.
+    struct_cx = x0 + (x1 - x0) // 2  # horizontal centre of the structure box
+    struct_cy = y0 + (y1 - y0) // 2  # vertical centre of the structure box
 
     if placement == "below":
-        pos_x = x0 + (x1 - x0 - text_w) // 2
-        pos_y = y1 + offset
+        # Horizontally centred under the structure, shifted down by offset.
+        cx = struct_cx
+        cy = y1 + offset + text_h // 2
         angle = 0.0
     elif placement == "above":
-        pos_x = x0 + (x1 - x0 - text_w) // 2
-        pos_y = y0 - text_h - offset
+        # Horizontally centred above the structure, shifted up by offset.
+        cx = struct_cx
+        cy = y0 - offset - text_h // 2
         angle = 0.0
     elif placement == "left":
-        pos_x = x0 - text_w - offset
-        pos_y = y0 + (y1 - y0 - text_h) // 2
+        # Vertically centred to the left of the structure.
+        cx = x0 - offset - text_w // 2
+        cy = struct_cy
         angle = 0.0
     else:  # right
-        pos_x = x1 + offset
-        pos_y = y0 + (y1 - y0 - text_h) // 2
+        # Vertically centred to the right of the structure.
+        cx = x1 + offset + text_w // 2
+        cy = struct_cy
         angle = 0.0
 
-    # Small chance of rotation on left/right placements (mimics rotated axis labels)
+    # --- Optional rotation --------------------------------------------------
+    # Small chance of 90° rotation on side placements (mimics rotated axis labels).
     if placement in ("left", "right") and random.random() < cfg.label_90deg_prob:
         angle = 90.0
     elif random.random() < cfg.label_rotation_prob:
+        # Slight tilt (e.g. −15° to +15°) to add variety.
         angle = random.uniform(*cfg.label_rotation_range)
 
-    # 30% chance: dark background with light text
+    # --- Optional dark-background style (30 % of the time) ------------------
+    # Mimics inverted / highlighted labels seen in some publications.
     if random.random() < 0.30:
         bg_color = random.choice([
             (0, 0, 0),        # black
@@ -398,12 +521,13 @@ def add_label_near_structure(
             (0, 60, 0),       # dark green
             (60, 0, 80),      # dark purple
         ])
-        fill_color = (255, 255, 255)
+        fill_color = (255, 255, 255)  # white text on dark background
     else:
         bg_color = None
-        fill_color = (0, 0, 0)
+        fill_color = (0, 0, 0)        # default: black text, no background
 
-    label_box = draw_rotated_text(page, label, (pos_x, pos_y), font, angle,
+    # Render the label onto the page and get its bounding box back.
+    label_box = draw_rotated_text(page, label, (cx, cy), font, angle,
                                   fill=fill_color, bg_color=bg_color)
     return label_box, label
 
@@ -1149,10 +1273,20 @@ def make_page(
     font_paths: List[Path],
     distractor_pool: Optional[List[Image.Image]] = None,
 ) -> Tuple[Image.Image, List[dict]]:
+    """Generate one synthetic document page containing chemical structures.
+
+    Steps:
+      1. Decide layout mode (free-form / grid / two-column).
+      2. For each structure: render it, place it on the page, add a nearby label.
+      3. Scatter distractor elements (prose, captions, arrows, images, etc.).
+
+    Returns (page_image, panels) where each panel dict has:
+      struct_box, label_box, label_text, smiles.
+    """
     page = Image.new("RGB", (cfg.page_w, cfg.page_h), (255, 255, 255))
 
-    existing_boxes: List[Tuple[int, int, int, int]] = []
-    panels: List[dict] = []
+    existing_boxes: List[Tuple[int, int, int, int]] = []  # collision-avoidance registry
+    panels: List[dict] = []  # one entry per placed structure+label pair
 
     n_structures = random.randint(cfg.min_structures, cfg.max_structures)
     random.shuffle(smiles_pool)
@@ -1284,11 +1418,15 @@ def make_page(
 
 
 def yolo_label(box: Tuple[int, int, int, int], w: int, h: int, class_id: int = 0) -> str:
+    """Convert a pixel bounding box to a YOLO-format annotation line.
+
+    YOLO format: <class> <cx> <cy> <bw> <bh>  (all normalised 0-1).
+    """
     x0, y0, x1, y1 = box
-    cx = (x0 + x1) / 2.0 / w
-    cy = (y0 + y1) / 2.0 / h
-    bw = (x1 - x0) / w
-    bh = (y1 - y0) / h
+    cx = (x0 + x1) / 2.0 / w   # normalised centre-x
+    cy = (y0 + y1) / 2.0 / h   # normalised centre-y
+    bw = (x1 - x0) / w          # normalised width
+    bh = (y1 - y0) / h          # normalised height
     return f"{class_id} {cx:.6f} {cy:.6f} {bw:.6f} {bh:.6f}"
 
 
@@ -1311,21 +1449,32 @@ def save_sample(
     cfg: PageConfig,
     grayscale: bool = False,
 ) -> None:
+    """Post-process and save one generated page.
+
+    1. Apply random noise / JPEG artefacts / blur (data augmentation).
+    2. Optionally convert to grayscale (keeps 3-channel for YOLO compat).
+    3. Write the image, YOLO label file, and ground-truth JSON.
+    """
+    # --- Data-augmentation noise pass ---
     page = apply_noise(page, cfg)
 
     if grayscale:
-        page = page.convert("L").convert("RGB")  # keep 3-ch for YOLO compatibility
+        # L -> RGB keeps 3 channels so YOLO loaders don't complain.
+        page = page.convert("L").convert("RGB")
 
+    # Save the page image in the requested format.
     if fmt.lower() == "jpg":
         page.save(out_img, format="JPEG", quality=random.randint(60, 90))
     else:
         page.save(out_img, format="PNG")
 
+    # --- Build YOLO labels and ground-truth records ---
     yolo_lines = []
     gt_records = []
     for p in panels:
         sb = p["struct_box"]
         lb = p["label_box"]
+        # Clamp boxes to page bounds (labels near edges may poke outside).
         struct_box = clamp_box(sb, cfg.page_w, cfg.page_h)
         yolo_lines.append(yolo_label(struct_box, cfg.page_w, cfg.page_h, class_id=0))
         if lb is not None:
@@ -1340,6 +1489,7 @@ def save_sample(
             "smiles":      p["smiles"],
         })
 
+    # Write YOLO .txt (one line per object) and GT .json.
     out_lbl.write_text("\n".join(yolo_lines))
     out_gt.write_text(json.dumps(gt_records, indent=2))
 
