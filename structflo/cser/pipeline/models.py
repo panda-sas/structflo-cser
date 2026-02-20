@@ -1,0 +1,76 @@
+"""Core data structures for the extraction pipeline."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+
+@dataclass
+class BBox:
+    x1: float
+    y1: float
+    x2: float
+    y2: float
+
+    @classmethod
+    def from_list(cls, lst: list[float]) -> BBox:
+        return cls(lst[0], lst[1], lst[2], lst[3])
+
+    @property
+    def centroid(self) -> tuple[float, float]:
+        return ((self.x1 + self.x2) / 2, (self.y1 + self.y2) / 2)
+
+    @property
+    def width(self) -> float:
+        return self.x2 - self.x1
+
+    @property
+    def height(self) -> float:
+        return self.y2 - self.y1
+
+    def as_list(self) -> list[float]:
+        return [self.x1, self.y1, self.x2, self.y2]
+
+    def as_tuple(self) -> tuple[float, float, float, float]:
+        return (self.x1, self.y1, self.x2, self.y2)
+
+
+@dataclass
+class Detection:
+    bbox: BBox
+    conf: float
+    class_id: int  # 0 = structure, 1 = label
+
+    @classmethod
+    def from_dict(cls, d: dict) -> Detection:
+        return cls(
+            bbox=BBox.from_list(d["bbox"]),
+            conf=d["conf"],
+            class_id=d["class_id"],
+        )
+
+
+@dataclass
+class CompoundPair:
+    """A matched (chemical_structure, compound_label) pair.
+
+    Populated by the matcher; optionally enriched with SMILES and OCR text
+    by the pipeline extraction steps.
+    """
+
+    structure: Detection
+    label: Detection
+    match_distance: float  # centroid distance in pixels (matcher-specific metric)
+    smiles: str | None = None
+    label_text: str | None = None
+
+    def to_dict(self) -> dict:
+        return {
+            "structure_bbox": self.structure.bbox.as_list(),
+            "structure_conf": round(self.structure.conf, 4),
+            "label_bbox": self.label.bbox.as_list(),
+            "label_conf": round(self.label.conf, 4),
+            "match_distance": round(self.match_distance, 2),
+            "smiles": self.smiles,
+            "label_text": self.label_text,
+        }
