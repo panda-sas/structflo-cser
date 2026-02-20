@@ -64,6 +64,13 @@ REGISTRY: dict[str, dict[str, dict]] = {
         #     "sha256":   "abc123...",
         #     "requires": ">=0.1.0,<1.0.0",
         # },
+        "v0.1": {
+            "repo_id":  "sidxz/structflo-cser-detector",
+            "filename": "best.pt",
+            "revision": "weights-v0.1",
+            "sha256":   "2b139a7e78a6721f16187967bd782acf61e4c7389d2097ea05daeb942cda4bf5",
+            "requires": ">=0.1.0,<1.0.0",
+        },
     },
     # Future models go here, e.g.:
     # "ner-tagger": {
@@ -79,7 +86,7 @@ REGISTRY: dict[str, dict[str, dict]] = {
 # The version resolved when the caller does not specify one.
 # Keep in sync with REGISTRY — point to the newest entry per model.
 LATEST: dict[str, str | None] = {
-    "cser-detector": None,  # set to e.g. "v1.0" once weights are published
+    "cser-detector": "v0.1",  # set to e.g. "v1.0" once weights are published
 }
 
 

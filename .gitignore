@@ -1,15 +1,69 @@
-# Python-generated files
+# ── Python ────────────────────────────────────────────────────────────────────
 __pycache__/
 *.py[oc]
+*.pyd
 build/
 dist/
 wheels/
-*.egg-info
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+MANIFEST
 
-# Virtual environments
-.venv
-/data/
+# ── Virtual environments ───────────────────────────────────────────────────────
+.venv/
+venv/
+env/
+
+# ── Testing & linting ─────────────────────────────────────────────────────────
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# ── Jupyter ───────────────────────────────────────────────────────────────────
+.ipynb_checkpoints/
+*.nbconvert/
+
+# ── Editors & IDEs ────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ── Project: training & inference outputs ────────────────────────────────────
 runs/
 detections/
 archive/
+
+# ── Project: datasets & generated data ───────────────────────────────────────
+/data/
+
+# ── Model weights ─────────────────────────────────────────────────────────────
+# Weights are published to HF Hub — never commit .pt files directly.
+# Exception: commit weights.py (the registry) but not the binaries.
 *.pt
+*.pth
+*.ckpt
+*.safetensors
+
+# ── Secrets & credentials ─────────────────────────────────────────────────────
+.env
+.env.*
+*.pem
+*.key
+secrets/
+
+# ── Logs ──────────────────────────────────────────────────────────────────────
+*.log
+logs/
+
+# ── Misc ──────────────────────────────────────────────────────────────────────
+.claude/
+tmp/
+scratch/
