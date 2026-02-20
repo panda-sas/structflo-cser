@@ -1237,46 +1237,46 @@ def make_page(
             break
 
     # -- Distractors: text elements --
-    # Prose blocks: always 2-4 large blocks to fill the page
-    for _ in range(random.randint(2, 4)):
+    # Prose blocks: large blocks of body text
+    for _ in range(random.randint(3, 7)):
         add_prose_block(page, cfg, font_paths, existing_boxes)
-    # Multiline text blocks: 3-6 per page
-    for _ in range(random.randint(3, 6)):
+    # Multiline text blocks
+    for _ in range(random.randint(5, 10)):
         add_multiline_text_block(page, cfg, font_paths, existing_boxes)
-    # Captions: 1-3 per page
-    for _ in range(random.randint(1, 3)):
+    # Captions
+    for _ in range(random.randint(2, 5)):
         add_caption(page, cfg, font_paths, existing_boxes)
-    # Stray text: 4-8 snippets per page
-    for _ in range(random.randint(4, 8)):
+    # Stray text snippets
+    for _ in range(random.randint(8, 16)):
         add_stray_text(page, cfg, font_paths, existing_boxes)
-    # Equation fragments: 2-4 per page
-    for _ in range(random.randint(2, 4)):
+    # Equation / measurement fragments
+    for _ in range(random.randint(4, 8)):
         add_equation_fragment(page, cfg, font_paths, existing_boxes)
-    # Section headers: 1-3 per page
-    for _ in range(random.randint(1, 3)):
+    # Section headers
+    for _ in range(random.randint(2, 5)):
         add_section_header(page, cfg, font_paths, existing_boxes)
-    # Footnotes: 0-2
-    for _ in range(random.randint(0, 2)):
+    # Footnotes
+    for _ in range(random.randint(1, 4)):
         add_footnote(page, cfg, font_paths, existing_boxes)
-    # Journal header: most pages have one
-    if random.random() < 0.8:
+    # Journal header
+    if random.random() < 0.95:
         add_journal_header(page, cfg, font_paths, existing_boxes)
-    # R-group tables: 0-2 per page
-    for _ in range(random.randint(0, 2)):
+    # R-group tables
+    for _ in range(random.randint(1, 3)):
         add_rgroup_table(page, cfg, font_paths, existing_boxes)
-    # Arrows: 0-3
-    for _ in range(random.randint(0, 3)):
+    # Arrows
+    for _ in range(random.randint(1, 5)):
         add_arrow(page, cfg, existing_boxes)
-    # Panel borders: 0-2
-    for _ in range(random.randint(0, 2)):
+    # Panel borders
+    for _ in range(random.randint(0, 3)):
         add_panel_border(page, cfg, existing_boxes)
     add_page_number(page, cfg, font_paths, existing_boxes)
 
     # -- Random images / charts --
     if distractor_pool:
-        n_images = random.randint(2, 5)
+        n_images = random.randint(3, 7)
     else:
-        n_images = random.randint(1, 3)
+        n_images = random.randint(2, 5)
     for _ in range(n_images):
         add_random_image(page, cfg, existing_boxes, distractor_pool)
 
