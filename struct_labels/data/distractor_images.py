@@ -1,31 +1,50 @@
-#!/usr/bin/env python3
-"""
-Download diverse distractor images for synthetic page generation.
-
-Downloads random real-world photos from Lorem Picsum (backed by Unsplash)
-to use as hard-negative distractors. These help the YOLO model learn NOT
-to fire on non-chemistry images embedded in document pages.
-
-Usage:
-    python scripts/download_distractor_images.py --out data/distractors --count 300
-"""
+"""Distractor image loading and Picsum download utilities."""
 
 import argparse
 import random
-import sys
-from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from pathlib import Path
+from typing import List, Optional
 
 import requests
+from PIL import Image
 from tqdm import tqdm
 
-# Lorem Picsum – serves real photos from Unsplash. No API key needed.
 PICSUM_LIST_URL = "https://picsum.photos/v2/list"
 
 
-def fetch_picsum_list(n_pages: int = 30) -> list[dict]:
+def load_distractor_images(distractors_dir: Optional[Path]) -> List[Image.Image]:
+    """Pre-load distractor images from disk (kept at original size for variety)."""
+    if distractors_dir is None or not distractors_dir.exists():
+        return []
+    imgs: List[Image.Image] = []
+    extensions = ("*.jpg", "*.jpeg", "*.png", "*.webp", "*.bmp")
+    paths: List[Path] = []
+    for ext in extensions:
+        paths.extend(distractors_dir.glob(ext))
+    for p in sorted(paths):
+        try:
+            img = Image.open(p).convert("RGB")
+            imgs.append(img)
+        except Exception:
+            continue
+    return imgs
+
+
+def _pick_distractor_image(distractor_pool: List[Image.Image]) -> Image.Image:
+    """Pick a random real distractor image and resize it to a random distractor size."""
+    img = random.choice(distractor_pool).copy()
+    target_w = random.randint(150, 500)
+    target_h = random.randint(120, 400)
+    img = img.resize((target_w, target_h), Image.LANCZOS)
+    if random.random() < 0.25:
+        img = img.convert("L").convert("RGB")
+    return img
+
+
+def fetch_picsum_list(n_pages: int = 30) -> list:
     """Fetch the Picsum photo list (paginated, up to 100 per page)."""
-    all_items: list[dict] = []
+    all_items: list = []
     for page in range(1, n_pages + 1):
         resp = requests.get(
             PICSUM_LIST_URL,
@@ -64,36 +83,19 @@ def main() -> int:
     parser = argparse.ArgumentParser(
         description="Download distractor images for synthetic page generation"
     )
-    parser.add_argument(
-        "--out",
-        type=Path,
-        default=Path("data/distractors"),
-        help="Output directory for downloaded images",
-    )
-    parser.add_argument(
-        "--count",
-        type=int,
-        default=300,
-        help="Number of images to download",
-    )
-    parser.add_argument(
-        "--seed",
-        type=int,
-        default=42,
-        help="Random seed for reproducible selection",
-    )
-    parser.add_argument(
-        "--workers",
-        type=int,
-        default=8,
-        help="Number of parallel download threads",
-    )
+    parser.add_argument("--out", type=Path, default=Path("data/distractors"),
+                        help="Output directory for downloaded images")
+    parser.add_argument("--count", type=int, default=300,
+                        help="Number of images to download")
+    parser.add_argument("--seed", type=int, default=42,
+                        help="Random seed for reproducible selection")
+    parser.add_argument("--workers", type=int, default=8,
+                        help="Number of parallel download threads")
     args = parser.parse_args()
 
     out_dir: Path = args.out
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    # Check how many we already have
     existing = list(out_dir.glob("*.jpg")) + list(out_dir.glob("*.png"))
     if len(existing) >= args.count:
         print(f"Already have {len(existing)} images in {out_dir}, skipping download.")
@@ -102,7 +104,6 @@ def main() -> int:
     needed = args.count - len(existing)
     idx_start = len(existing)
 
-    # Fetch available photo IDs from Picsum
     print("Fetching photo list from Lorem Picsum (Unsplash)...")
     photos = fetch_picsum_list(n_pages=30)
     if not photos:
@@ -111,16 +112,13 @@ def main() -> int:
     print(f"  Found {len(photos)} photos available.")
 
     rng = random.Random(args.seed)
-
-    # Build download tasks – vary sizes to simulate different document insets
     sizes = [
         (300, 200), (400, 300), (350, 250), (250, 180),
         (500, 350), (200, 300), (280, 280), (450, 200),
         (320, 240), (380, 260), (220, 330), (480, 320),
     ]
 
-    # Repeat / shuffle photos to fill `needed`
-    tasks: list[tuple[str, int, int]] = []
+    tasks: list = []
     while len(tasks) < needed:
         rng.shuffle(photos)
         for p in photos:
@@ -155,10 +153,8 @@ def main() -> int:
             else:
                 failed += 1
                 out_path.unlink(missing_ok=True)
-
         pbar.close()
 
-    # Clean up any empty files
     for f in out_dir.glob("distractor_*.jpg"):
         if f.stat().st_size == 0:
             f.unlink()

@@ -1,26 +1,27 @@
-#!/usr/bin/env python3
-"""
-Fetch diverse SMILES from ChEMBL SQLite database.
-
-This script connects to a local ChEMBL SQLite database and extracts
-small molecule SMILES with molecular weight between 150-900 Da.
-
-Download ChEMBL SQLite from:
-https://ftp.ebi.ac.uk/pub/databases/chembl/ChEMBLdb/latest/
-
-Example:
-    wget https://ftp.ebi.ac.uk/pub/databases/chembl/ChEMBLdb/latest/chembl_34_sqlite.tar.gz
-    tar -xzf chembl_34_sqlite.tar.gz
-"""
+"""SMILES loading and ChEMBL extraction utilities."""
 
 import argparse
 import csv
 import sqlite3
 from pathlib import Path
-from typing import Optional
+from typing import List
 
 from rdkit import Chem
 from tqdm import tqdm
+
+
+def load_smiles(csv_path: Path) -> List[str]:
+    """Load SMILES strings from a CSV file produced by fetch_smiles_from_chembl_sqlite."""
+    smiles = []
+    with csv_path.open("r", newline="") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            smi = row.get("smiles")
+            if smi:
+                smiles.append(smi)
+    if not smiles:
+        raise ValueError(f"No SMILES found in {csv_path}")
+    return smiles
 
 
 def fetch_smiles_from_chembl_sqlite(
@@ -30,8 +31,7 @@ def fetch_smiles_from_chembl_sqlite(
     min_mw: float = 150.0,
     max_mw: float = 900.0,
 ) -> None:
-    """
-    Fetch SMILES from ChEMBL SQLite database.
+    """Fetch and validate SMILES from a local ChEMBL SQLite database.
 
     Args:
         db_path: Path to ChEMBL SQLite database file (.db or .sqlite)
@@ -40,12 +40,10 @@ def fetch_smiles_from_chembl_sqlite(
         min_mw: Minimum molecular weight (freebase)
         max_mw: Maximum molecular weight (freebase)
     """
-    # Connect to database
     print(f"Connecting to {db_path}...")
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
 
-    # SQL query to fetch diverse small molecules
     query = """
         SELECT DISTINCT cs.canonical_smiles, md.chembl_id, cp.mw_freebase
         FROM compound_structures cs
@@ -66,101 +64,68 @@ def fetch_smiles_from_chembl_sqlite(
 
     print(f"Retrieved {len(rows)} rows from database")
 
-    # Validate with RDKit and collect
     collected = []
     seen = set()
 
     for smiles, chembl_id, mw in tqdm(rows, desc="Validating"):
-        # Skip if already seen
         if smiles in seen:
             continue
-
-        # Validate with RDKit
         mol = Chem.MolFromSmiles(smiles)
         if mol is None:
             continue
-
-        # Canonicalize
         canonical = Chem.MolToSmiles(mol)
         if canonical in seen:
             continue
-
         seen.add(canonical)
         collected.append({
-            'chembl_id': chembl_id,
-            'smiles': canonical,
-            'num_atoms': mol.GetNumHeavyAtoms(),
-            'mw': round(mw, 2) if mw else None,
+            "chembl_id": chembl_id,
+            "smiles": canonical,
+            "num_atoms": mol.GetNumHeavyAtoms(),
+            "mw": round(mw, 2) if mw else None,
         })
 
-    # Save to CSV
     output_dir = Path(output_path).parent
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    with open(output_path, 'w', newline='') as f:
-        fieldnames = ['chembl_id', 'smiles', 'num_atoms', 'mw']
+    with open(output_path, "w", newline="") as f:
+        fieldnames = ["chembl_id", "smiles", "num_atoms", "mw"]
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
         writer.writerows(collected)
 
-    print(f"\n✓ Saved {len(collected)} valid SMILES to {output_path}")
+    print(f"\nSaved {len(collected)} valid SMILES to {output_path}")
 
 
-def main():
+def main() -> int:
     parser = argparse.ArgumentParser(
         description="Fetch SMILES from ChEMBL SQLite database",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-Example usage:
-    # Download ChEMBL database first:
-    wget https://ftp.ebi.ac.uk/pub/databases/chembl/ChEMBLdb/latest/chembl_34_sqlite.tar.gz
-    tar -xzf chembl_34_sqlite.tar.gz
-    
-    # Then run this script:
-    python scripts/01_fetch_smiles.py --db chembl_34/chembl_34_sqlite/chembl_34.db
-        """
-    )
-    parser.add_argument(
-        '--db',
-        type=str,
-        default='chembl_34.db',
-        help='Path to ChEMBL SQLite database file (default: chembl_34.db)'
-    )
-    parser.add_argument(
-        '--output',
-        type=str,
-        default='data/smiles/chembl_smiles.csv',
-        help='Output CSV file path (default: data/smiles/chembl_smiles.csv)'
-    )
-    parser.add_argument(
-        '--n',
-        type=int,
-        default=20000,
-        help='Number of SMILES to fetch (default: 20000)'
-    )
-    parser.add_argument(
-        '--min-mw',
-        type=float,
-        default=150.0,
-        help='Minimum molecular weight (default: 150.0)'
-    )
-    parser.add_argument(
-        '--max-mw',
-        type=float,
-        default=900.0,
-        help='Maximum molecular weight (default: 900.0)'
-    )
+Download ChEMBL SQLite from:
+  https://ftp.ebi.ac.uk/pub/databases/chembl/ChEMBLdb/latest/
 
+Example:
+  wget https://ftp.ebi.ac.uk/pub/databases/chembl/ChEMBLdb/latest/chembl_35_sqlite.tar.gz
+  tar -xzf chembl_35_sqlite.tar.gz
+  sl-fetch-smiles --db chembl_35/chembl_35_sqlite/chembl_35.db
+        """,
+    )
+    parser.add_argument("--db", type=str, default="chembl_34.db",
+                        help="Path to ChEMBL SQLite database file")
+    parser.add_argument("--output", type=str, default="data/smiles/chembl_smiles.csv",
+                        help="Output CSV file path")
+    parser.add_argument("--n", type=int, default=20000,
+                        help="Number of SMILES to fetch")
+    parser.add_argument("--min-mw", type=float, default=150.0,
+                        help="Minimum molecular weight")
+    parser.add_argument("--max-mw", type=float, default=900.0,
+                        help="Maximum molecular weight")
     args = parser.parse_args()
 
-    # Check if database exists
     if not Path(args.db).exists():
         print(f"Error: Database file not found: {args.db}")
-        print("\nPlease download ChEMBL SQLite database from:")
+        print("\nPlease download ChEMBL SQLite from:")
         print("https://ftp.ebi.ac.uk/pub/databases/chembl/ChEMBLdb/latest/")
-        print("\nExample commands:")
-        print("  wget https://ftp.ebi.ac.uk/pub/databases/chembl/ChEMBLdb/latest/chembl_34_sqlite.tar.gz")
-        print("  tar -xzf chembl_34_sqlite.tar.gz")
         return 1
 
     fetch_smiles_from_chembl_sqlite(
@@ -170,9 +135,8 @@ Example usage:
         min_mw=args.min_mw,
         max_mw=args.max_mw,
     )
-
     return 0
 
 
 if __name__ == "__main__":
-    exit(main())
+    raise SystemExit(main())
