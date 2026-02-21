@@ -33,6 +33,8 @@ sf-viz                  = "structflo.cser.viz.labels:main"
 sf-download-distractors = "structflo.cser.data.distractor_images:main"
 sf-annotate             = "annotate.__main__:main"
 sf-extract              = "structflo.cser.pipeline.cli:main"
+sf-train-lps            = "structflo.cser.lps.train:main"
+sf-eval-lps             = "structflo.cser.lps.evaluate:main"
 
 [build-system]
 requires = ["hatchling"]

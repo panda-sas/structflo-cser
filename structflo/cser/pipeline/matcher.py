@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
+import numpy as np
+
 from structflo.cser.pipeline.models import CompoundPair, Detection
 
 
@@ -14,8 +16,19 @@ class BaseMatcher(ABC):
     """
 
     @abstractmethod
-    def match(self, detections: list[Detection]) -> list[CompoundPair]:
-        """Accept a flat list of detections (all classes) and return matched pairs."""
+    def match(
+        self,
+        detections: list[Detection],
+        image: np.ndarray | None = None,
+    ) -> list[CompoundPair]:
+        """Accept a flat list of detections (all classes) and return matched pairs.
+
+        Args:
+            detections: All detections from YOLO (structures + labels mixed).
+            image:      Page image as a uint8 numpy array.  Required by
+                        ``LearnedMatcher`` with a visual scorer; ignored by
+                        ``HungarianMatcher``.
+        """
         ...
 
 
@@ -34,7 +47,11 @@ class HungarianMatcher(BaseMatcher):
         """
         self.max_distance = max_distance
 
-    def match(self, detections: list[Detection]) -> list[CompoundPair]:
+    def match(
+        self,
+        detections: list[Detection],
+        image: np.ndarray | None = None,  # accepted but not used
+    ) -> list[CompoundPair]:
         from structflo.cser.inference.pairing import pair_detections
 
         # Detection → raw dict (what pair_detections expects)

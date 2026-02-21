@@ -127,9 +127,23 @@ class ChemPipeline:
             raw = detect_full(self._model, img_np, conf=self.conf)
         return [Detection.from_dict(d) for d in raw]
 
-    def match(self, detections: list[Detection]) -> list[CompoundPair]:
-        """Pair structure detections with label detections using the configured matcher."""
-        return self._matcher.match(detections)
+    def match(
+        self,
+        detections: list[Detection],
+        image: ImageLike | None = None,
+    ) -> list[CompoundPair]:
+        """Pair structure detections with label detections using the configured matcher.
+
+        Args:
+            detections: Flat list of all detections from ``detect()``.
+            image:      Page image forwarded to the matcher.  Required when
+                        using ``LearnedMatcher`` with a visual scorer; ignored
+                        by ``HungarianMatcher``.
+        """
+        img_np: np.ndarray | None = None
+        if image is not None:
+            img_np = np.array(_to_pil(image))
+        return self._matcher.match(detections, image=img_np)
 
     def extract_smiles(self, image: ImageLike, pair: CompoundPair) -> str | None:
         """Crop the structure region from *image* and extract a SMILES string."""
@@ -167,7 +181,7 @@ class ChemPipeline:
         """
         img = _to_pil(image)
         detections = self.detect(img)
-        pairs = self.match(detections)
+        pairs = self.match(detections, image=img)
         return self.enrich(pairs, img)
 
     # ------------------------------------------------------------------

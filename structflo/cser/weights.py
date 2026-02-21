@@ -72,21 +72,23 @@ REGISTRY: dict[str, dict[str, dict]] = {
             "requires": ">=0.1.0,<1.0.0",
         },
     },
-    # Future models go here, e.g.:
-    # "ner-tagger": {
-    #     "v1.0": {
-    #         "repo_id":  "structflo/ner-tagger",
-    #         "filename": "model.pt",
-    #         "revision": "weights-v1.0",
-    #         "requires": ">=0.2.0,<1.0.0",
-    #     },
-    # },
+    "cser-lps": {
+        # Populate after first training run and HF Hub publish:
+        # "v1.0": {
+        #     "repo_id":  "sidxz/structflo-cser-lps",
+        #     "filename": "scorer_best.pt",
+        #     "revision": "weights-v1.0",
+        #     "sha256":   "...",
+        #     "requires": ">=0.1.0,<1.0.0",
+        # },
+    },
 }
 
 # The version resolved when the caller does not specify one.
 # Keep in sync with REGISTRY — point to the newest entry per model.
 LATEST: dict[str, str | None] = {
-    "cser-detector": "v0.1",  # set to e.g. "v1.0" once weights are published
+    "cser-detector": "v0.1",
+    "cser-lps":      None,  # set to "v1.0" after first publish
 }
 
 
