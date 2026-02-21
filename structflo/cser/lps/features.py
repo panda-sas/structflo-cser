@@ -20,7 +20,7 @@ GEOM_DIM = 14  # length of the geometric feature vector produced by geom_feature
 # Fixed crop sizes fed to the CNN branches of VisualScorer.
 # (H, W) convention — structures are square, labels are wide/flat for text.
 STRUCT_CROP_SIZE: tuple[int, int] = (128, 128)
-LABEL_CROP_SIZE: tuple[int, int] = (32, 96)
+LABEL_CROP_SIZE: tuple[int, int] = (64, 96)   # taller than before: handles rotated text
 
 
 # ---------------------------------------------------------------------------

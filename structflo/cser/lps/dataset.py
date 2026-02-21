@@ -6,11 +6,10 @@ associations; hard negative pairs are the spatially *nearest* wrong labels
 on the same page.
 
 Internal storage uses flat numpy arrays so that the dataset can be pickled
-quickly (≈ 40 MB for 773 K samples) when DataLoader spawns worker processes.
-Storing 773 K Python objects would be ≈ 350 MB and takes minutes to pickle.
+quickly (~40 MB for 700K+ samples) when DataLoader spawns worker processes.
 
-Image loading in workers uses cv2 instead of PIL to avoid libjpeg mutex
-deadlocks that occur when PIL's JPEG state is forked into child processes.
+Image loading in workers uses cv2 to avoid libjpeg mutex deadlocks that
+occur when PIL's JPEG state is forked into child processes.
 """
 
 from __future__ import annotations
@@ -39,6 +38,52 @@ from structflo.cser.lps.features import (
 Split = Literal["train", "val"]
 
 
+# ---------------------------------------------------------------------------
+# Visual augmentation (training only)
+# ---------------------------------------------------------------------------
+
+
+def _augment_crop(
+    crop: np.ndarray,
+    rng: np.random.Generator,
+    max_rot: float = 45.0,
+    p_flip: float = 0.5,
+    brightness_range: float = 0.25,
+) -> np.ndarray:
+    """Random rotation + flip + brightness jitter on a (1, H, W) float32 crop.
+
+    Args:
+        crop:             Input crop, shape (1, H, W), float32 in [0, 1].
+        rng:              NumPy Generator — caller provides for reproducibility.
+        max_rot:          Maximum rotation angle in degrees (symmetric ± range).
+                          Use ~180° for structures (rotationally symmetric),
+                          ~45° for labels (text is semi-upright in real docs).
+        p_flip:           Probability of horizontal flip.
+        brightness_range: Scalar multiplier sampled from
+                          [1 - range, 1 + range].
+    """
+    img = Image.fromarray((crop[0] * 255).astype(np.uint8), mode="L")
+
+    angle = float(rng.uniform(-max_rot, max_rot))
+    img = img.rotate(angle, resample=Image.Resampling.BILINEAR, expand=False, fillcolor=255)
+
+    if rng.random() < p_flip:
+        img = img.transpose(Image.Transpose.FLIP_LEFT_RIGHT)
+
+    arr = np.array(img, dtype=np.float32) / 255.0
+    if brightness_range > 0:
+        arr = np.clip(
+            arr * float(rng.uniform(1 - brightness_range, 1 + brightness_range)),
+            0.0, 1.0,
+        )
+    return arr[np.newaxis]  # (1, H, W)
+
+
+# ---------------------------------------------------------------------------
+# Per-worker image cache
+# ---------------------------------------------------------------------------
+
+
 @functools.lru_cache(maxsize=8)
 def _load_page_image(path: str) -> np.ndarray | None:
     """Decode a JPEG page once and cache the result per worker process.
@@ -48,6 +93,11 @@ def _load_page_image(path: str) -> np.ndarray | None:
     with the same path are O(1) array lookups instead of full JPEG decodes.
     """
     return cv2.imread(path, cv2.IMREAD_GRAYSCALE)
+
+
+# ---------------------------------------------------------------------------
+# Page-grouped sampler
+# ---------------------------------------------------------------------------
 
 
 class PageGroupSampler(Sampler[int]):
@@ -92,33 +142,44 @@ class PageGroupSampler(Sampler[int]):
         return self._n
 
 
+# ---------------------------------------------------------------------------
+# Dataset
+# ---------------------------------------------------------------------------
+
+
 class LPSDataset(Dataset):
     """Learned Pair Scorer training dataset.
+
+    Every sample returns:
+        ``geom``         — float32 tensor (GEOM_DIM,)
+        ``struct_crop``  — float32 tensor (1, 128, 128)
+        ``label_crop``   — float32 tensor (1,  64,  96)
+        ``target``       — float32 scalar  (1.0 = true pair, 0.0 = negative)
 
     Args:
         data_dir:    Root of one data split, e.g. ``data/generated/train``.
                      Must contain ``images/`` and ``ground_truth/`` subdirs.
-        visual:      If ``True``, ``__getitem__`` also returns image crops
-                     (``struct_crop``, ``label_crop``) for ``VisualScorer``.
         neg_per_pos: Number of hard negative pairs generated per positive.
                      Negatives are the *neg_per_pos* spatially nearest wrong
                      labels on the same page.
         bbox_jitter: Fraction of bbox size used as uniform coordinate noise.
                      Simulates YOLO localisation errors (recommended: 0.02).
-        seed:        Random seed for reproducible jitter.
+        augment:     If ``True``, apply random rotation/flip/brightness to
+                     image crops.  Enable for training, disable for val.
+        seed:        Random seed for reproducible jitter and augmentation.
     """
 
     def __init__(
         self,
         data_dir: Path | str,
-        visual: bool = False,
         neg_per_pos: int = 3,
         bbox_jitter: float = 0.02,
+        augment: bool = False,
         seed: int = 42,
     ) -> None:
         self.data_dir = Path(data_dir)
-        self.visual = visual
         self.bbox_jitter = bbox_jitter
+        self.augment = augment
         self._seed = seed
         self._build(neg_per_pos)
 
@@ -144,8 +205,6 @@ class LPSDataset(Dataset):
         if not json_files:
             raise FileNotFoundError(f"No GT JSON files found in {gt_dir}")
 
-        # Accumulate into plain lists, then convert to numpy at the end.
-        # This avoids building 700K+ Python objects that are slow to pickle.
         path_seen: dict[str, int] = {}
         path_list: list[str] = []
 
@@ -166,9 +225,8 @@ class LPSDataset(Dataset):
 
             # Read dimensions from header only — no full JPEG decode in main process.
             with Image.open(img_path) as im:
-                page_w, page_h = im.size  # PIL: (width, height)
+                page_w, page_h = im.size
 
-            # Deduplicate image paths so the pickled list stays small.
             path_str = str(img_path)
             if path_str not in path_seen:
                 path_seen[path_str] = len(path_list)
@@ -206,13 +264,12 @@ class LPSDataset(Dataset):
                     page_sizes.append([float(page_w), float(page_h)])
                     targets.append(0)
 
-        # Convert to compact numpy arrays — fast to pickle (spawn workers)
         self._img_paths: list[str] = path_list
         self._path_idx = np.array(path_indices, dtype=np.int32)
-        self._struct_bboxes = np.array(struct_bboxes, dtype=np.float32)   # (N, 4)
-        self._label_bboxes = np.array(label_bboxes, dtype=np.float32)    # (N, 4)
-        self._page_sizes = np.array(page_sizes, dtype=np.float32)         # (N, 2)
-        self._targets = np.array(targets, dtype=np.int8)                   # (N,)
+        self._struct_bboxes = np.array(struct_bboxes, dtype=np.float32)
+        self._label_bboxes = np.array(label_bboxes, dtype=np.float32)
+        self._page_sizes = np.array(page_sizes, dtype=np.float32)
+        self._targets = np.array(targets, dtype=np.int8)
 
     # ------------------------------------------------------------------
     # Dataset API
@@ -222,7 +279,7 @@ class LPSDataset(Dataset):
         return len(self._targets)
 
     def pos_weight(self) -> float:
-        """Ratio of negatives to positives — pass as ``pos_weight`` in BCEWithLogitsLoss."""
+        """Ratio of negatives to positives — pass as ``pos_weight`` to BCEWithLogitsLoss."""
         n_pos = int(self._targets.sum())
         n_neg = len(self._targets) - n_pos
         return n_neg / max(n_pos, 1)
@@ -246,20 +303,23 @@ class LPSDataset(Dataset):
         geom = torch.from_numpy(
             geom_features(s_bbox, l_bbox, float(page_w), float(page_h))
         )
-        result: dict[str, Tensor] = {
+
+        img_np = _load_page_image(self._img_paths[self._path_idx[idx]])
+        if img_np is None:
+            img_np = np.zeros((int(page_h), int(page_w)), dtype=np.uint8)
+
+        s_crop = crop_region(img_np, s_bbox, STRUCT_CROP_SIZE)
+        l_crop = crop_region(img_np, l_bbox, LABEL_CROP_SIZE)
+
+        if self.augment:
+            # Structures: molecules are rotationally symmetric — full ±180°.
+            # Labels: real-world text is semi-upright — limit to ±45°.
+            s_crop = _augment_crop(s_crop, rng, max_rot=180.0)
+            l_crop = _augment_crop(l_crop, rng, max_rot=45.0)
+
+        return {
             "geom": geom,
+            "struct_crop": torch.from_numpy(s_crop),
+            "label_crop": torch.from_numpy(l_crop),
             "target": torch.tensor(target, dtype=torch.float32),
         }
-
-        if self.visual:
-            img_np = _load_page_image(self._img_paths[self._path_idx[idx]])
-            if img_np is None:
-                img_np = np.zeros((int(page_h), int(page_w)), dtype=np.uint8)
-            result["struct_crop"] = torch.from_numpy(
-                crop_region(img_np, s_bbox, STRUCT_CROP_SIZE)
-            )
-            result["label_crop"] = torch.from_numpy(
-                crop_region(img_np, l_bbox, LABEL_CROP_SIZE)
-            )
-
-        return result

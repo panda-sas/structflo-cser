@@ -4,12 +4,11 @@ Entry point: ``sf-eval-lps``
 
 Usage::
 
-    sf-eval-lps --weights runs/lps/scorer_best.pt --data-dir data/generated/val
+    sf-eval-lps --weights runs/lps/scorer_best.pt
 
 The script creates "detections" from ground-truth bounding boxes (perfect
 localisation, no missed detections) so that it isolates the quality of the
-*matching* step alone.  This is the right evaluation before running the full
-inference pipeline on real images.
+*matching* step alone.
 
 Page-level accuracy: a page is correct only if **every** (structure, label)
 pair is correctly matched.  A single swap on a page counts as a failure.
@@ -49,13 +48,11 @@ def _centroids_close(a: list[float], b: list[float], tol: float = _TOL) -> bool:
 
 
 def _page_correct(pairs, gt_structs: list[list[float]], gt_labels: list[list[float]]) -> bool:
-    """Return True if every pair in *pairs* matches the ground truth association."""
     if len(pairs) != len(gt_structs):
         return False
     for pair in pairs:
         s_bbox = pair.structure.bbox.as_list()
         l_bbox = pair.label.bbox.as_list()
-        # Find which GT structure this matches
         match_idx = next(
             (i for i, gs in enumerate(gt_structs) if _centroids_close(s_bbox, gs)),
             None,
@@ -70,17 +67,13 @@ def _page_correct(pairs, gt_structs: list[list[float]], gt_labels: list[list[flo
 def _build_detections(valid_entries: list[dict]) -> list[Detection]:
     detections = []
     for entry in valid_entries:
-        detections.append(
-            Detection(bbox=BBox(*entry["struct_bbox"]), conf=1.0, class_id=0)
-        )
-        detections.append(
-            Detection(bbox=BBox(*entry["label_bbox"]), conf=1.0, class_id=1)
-        )
+        detections.append(Detection(bbox=BBox(*entry["struct_bbox"]), conf=1.0, class_id=0))
+        detections.append(Detection(bbox=BBox(*entry["label_bbox"]),  conf=1.0, class_id=1))
     return detections
 
 
 # ---------------------------------------------------------------------------
-# Core evaluation function
+# Core evaluation
 # ---------------------------------------------------------------------------
 
 
@@ -88,35 +81,29 @@ def evaluate(
     val_dir: Path,
     weights: Path | str,
     device: str = "cuda",
-    geometry_only: bool = False,
     max_pages: int | None = None,
 ) -> dict:
     """Compare HungarianMatcher and LearnedMatcher on ground-truth bounding boxes.
 
     Args:
-        val_dir:       Split directory containing ``ground_truth/`` and ``images/``.
-        weights:       Path to a trained scorer checkpoint.
-        device:        Torch device string.
-        geometry_only: Use geometric features only (skip visual crops).
-        max_pages:     If set, evaluate only the first *max_pages* pages (for
-                       quick sanity checks).
+        val_dir:   Split directory containing ``ground_truth/`` and ``images/``.
+        weights:   Path to a trained PairScorer checkpoint.
+        device:    Torch device string.
+        max_pages: Evaluate only the first N pages (quick sanity check).
 
     Returns:
         Dict with keys ``total_pages``, ``hungarian_accuracy``,
         ``learned_accuracy``, ``improvement``.
     """
-    # Late import so the module can be imported without torch installed
     from structflo.cser.lps.matcher import LearnedMatcher
 
-    gt_dir = val_dir / "ground_truth"
+    gt_dir  = val_dir / "ground_truth"
     img_dir = val_dir / "images"
 
     hungarian = HungarianMatcher()
-    learned = LearnedMatcher(weights=weights, device=device, geometry_only=geometry_only)
+    learned   = LearnedMatcher(weights=weights, device=device)
 
-    h_correct = 0
-    l_correct = 0
-    total = 0
+    h_correct = l_correct = total = 0
 
     json_files = sorted(gt_dir.glob("*.json"))
     if max_pages is not None:
@@ -126,20 +113,21 @@ def evaluate(
         entries: list[dict] = json.loads(json_path.read_text())
         valid = [e for e in entries if e.get("label_bbox") is not None]
 
-        # Skip pages with fewer than 2 labelled structures (trivially correct)
         if len(valid) < 2:
             continue
 
         gt_structs = [e["struct_bbox"] for e in valid]
-        gt_labels = [e["label_bbox"] for e in valid]
+        gt_labels  = [e["label_bbox"]  for e in valid]
         detections = _build_detections(valid)
 
-        # Load image for LearnedMatcher (optional for geom-only but passed anyway)
         stem = json_path.stem
         img_path = img_dir / f"{stem}.jpg"
         if not img_path.exists():
             img_path = img_dir / f"{stem}.png"
-        img_np = np.array(Image.open(img_path).convert("L")) if img_path.exists() else None
+        if not img_path.exists():
+            continue
+
+        img_np = np.array(Image.open(img_path).convert("L"))
 
         h_pairs = hungarian.match(detections)
         l_pairs = learned.match(detections, image=img_np)
@@ -174,30 +162,13 @@ def main() -> None:
     p = argparse.ArgumentParser(
         description="Evaluate LearnedMatcher vs HungarianMatcher on page-level pair accuracy"
     )
-    p.add_argument(
-        "--weights",
-        type=Path,
-        required=True,
-        help="Path to trained scorer checkpoint (scorer_best.pt)",
-    )
-    p.add_argument(
-        "--data-dir",
-        type=Path,
-        default=_DEFAULT_VAL_DIR,
-        help="Validation split directory (default: data/generated/val)",
-    )
+    p.add_argument("--weights", type=Path, required=True,
+                   help="Path to trained PairScorer checkpoint (scorer_best.pt)")
+    p.add_argument("--data-dir", type=Path, default=_DEFAULT_VAL_DIR,
+                   help="Validation split directory (default: data/generated/val)")
     p.add_argument("--device", default="cuda")
-    p.add_argument(
-        "--geometry-only",
-        action="store_true",
-        help="Use geometric features only (skip visual CNN crops)",
-    )
-    p.add_argument(
-        "--max-pages",
-        type=int,
-        default=None,
-        help="Limit evaluation to first N pages (quick sanity check)",
-    )
+    p.add_argument("--max-pages", type=int, default=None,
+                   help="Limit evaluation to first N pages (quick sanity check)")
 
     args = p.parse_args()
 
@@ -210,7 +181,6 @@ def main() -> None:
         val_dir=args.data_dir,
         weights=args.weights,
         device=args.device,
-        geometry_only=args.geometry_only,
         max_pages=args.max_pages,
     )
 
