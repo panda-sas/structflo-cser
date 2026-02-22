@@ -55,13 +55,13 @@ def upload():
 def list_pages():
     result = []
     for p in PAGES:
-        boxes = storage.load(p["id"], OUTPUT_DIR)
+        pairs = storage.load(p["id"], OUTPUT_DIR)
         result.append({
             "id":        p["id"],
             "w":         p["w"],
             "h":         p["h"],
-            "annotated": boxes is not None,        # GT JSON exists (even if [])
-            "n_boxes":   len(boxes) if boxes is not None else 0,
+            "annotated": pairs is not None,     # GT JSON exists (even if [])
+            "n_pairs":   len(pairs) if pairs is not None else 0,
         })
     return jsonify(result)
 
@@ -78,11 +78,11 @@ def serve_image(page_id):
 def get_annotations(page_id):
     page = _find(page_id)
     if not page:
-        return jsonify({"boxes": [], "annotated": False, "w": 0, "h": 0})
-    boxes = storage.load(page_id, OUTPUT_DIR)
+        return jsonify({"pairs": [], "annotated": False, "w": 0, "h": 0})
+    pairs = storage.load(page_id, OUTPUT_DIR)
     return jsonify({
-        "boxes":     boxes or [],
-        "annotated": boxes is not None,
+        "pairs":     pairs or [],
+        "annotated": pairs is not None,
         "w":         page["w"],
         "h":         page["h"],
     })
@@ -94,8 +94,8 @@ def post_annotations(page_id):
     if not page:
         return jsonify({"error": "unknown page"}), 404
     data = request.get_json()
-    storage.save(page_id, data["boxes"], page["w"], page["h"], OUTPUT_DIR)
-    return jsonify({"saved": len(data["boxes"]), "annotated": True})
+    storage.save(page_id, data["pairs"], page["w"], page["h"], OUTPUT_DIR)
+    return jsonify({"saved": len(data["pairs"]), "annotated": True})
 
 
 @app.route("/export", methods=["POST"])
@@ -110,8 +110,8 @@ def export():
 
     exported, skipped = 0, 0
     for page in PAGES:
-        boxes = storage.load(page["id"], OUTPUT_DIR)
-        if boxes is None:           # never annotated — discard
+        pairs = storage.load(page["id"], OUTPUT_DIR)
+        if pairs is None:           # never annotated — discard
             skipped += 1
             continue
         src = Path(page["path"])    # currently in tmp/
@@ -141,6 +141,6 @@ def stats():
         "pages":        len(PAGES),
         "annotated":    annotated,
         "pending":      len(PAGES) - annotated,
-        "total_boxes":  sum(p["n_boxes"] for p in pages_data),
+        "total_pairs":  sum(p["n_pairs"] for p in pages_data),
         "output_dir":   str(OUTPUT_DIR),
     })

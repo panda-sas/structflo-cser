@@ -9,69 +9,187 @@ body { font-family: monospace; background: #1a1a1a; color: #ddd;
        height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
 
 /* ── Toolbar ── */
-#toolbar { background: #2a2a2a; padding: 7px 12px; display: flex;
-           align-items: center; gap: 10px; border-bottom: 1px solid #444;
+#toolbar { background: #252525; padding: 6px 12px; display: flex;
+           align-items: center; gap: 8px; border-bottom: 1px solid #383838;
            flex-shrink: 0; flex-wrap: wrap; }
 #toolbar label { color: #aaa; font-size: 12px; }
-button { background: #3a3a3a; color: #ddd; border: 1px solid #555;
-         padding: 4px 11px; cursor: pointer; font-family: monospace;
-         font-size: 12px; border-radius: 3px; }
-button:hover  { background: #4a4a4a; }
-button.save   { background: #1e4a1e; border-color: #3a8a3a; color: #9f9; }
-button.empty  { background: #2a2a4a; border-color: #4a4aaa; color: #aaf; }
-button.danger { background: #4a1e1e; border-color: #aa3a3a; color: #f99; }
-button:disabled { opacity: 0.35; cursor: default; }
-/* Class toggle */
-#class-toggle { display: flex; gap: 4px; align-items: center; }
-#class-toggle label { color: #aaa; font-size: 12px; }
-.cls-btn { padding: 4px 10px; font-size: 12px; }
-.cls-btn.struct.active { background: #1a4a1a; border-color: #00c853; color: #00c853; }
-.cls-btn.lbl.active    { background: #1a2a4a; border-color: #2979ff; color: #6fa3ff; }
-#sep { color: #444; }
-#page-info { color: #9f9; font-size: 13px; min-width: 110px; }
-#progress   { color: #888; font-size: 11px; }
-#status { color: #fa0; font-size: 12px; margin-left: auto; }
+button { background: #333; color: #ccc; border: 1px solid #505050;
+         padding: 4px 10px; cursor: pointer; font-family: monospace;
+         font-size: 12px; border-radius: 3px; transition: background 0.1s; }
+button:hover  { background: #444; }
+button.save   { background: #1a4a1a; border-color: #357a35; color: #8e8; }
+button.empty  { background: #22224a; border-color: #4040a0; color: #99b; }
+button.danger { background: #4a1a1a; border-color: #903030; color: #e88; }
+button:disabled { opacity: 0.3; cursor: default; pointer-events: none; }
+
+.sep { color: #3a3a3a; user-select: none; }
+#page-info { color: #8d8; font-size: 13px; min-width: 100px; text-align: center; }
+#progress  { color: #666; font-size: 11px; white-space: nowrap; }
+#status    { color: #f90; font-size: 12px; margin-left: auto; }
+
+/* Zoom */
+#zoom-wrap { display: flex; align-items: center; gap: 2px; }
+#zoom-fit  { min-width: 44px; font-size: 11px; padding: 4px 6px; }
+#zoom-in, #zoom-out { padding: 4px 7px; font-size: 14px; font-weight: bold; }
+
+/* Auto-advance */
+#auto-adv-wrap { display: flex; align-items: center; gap: 5px; font-size: 11px;
+                 color: #888; cursor: pointer; }
+#auto-adv-wrap input { cursor: pointer; accent-color: #00c853; }
+
+/* ── Mode bar ── */
+#mode-bar { display: flex; align-items: center; gap: 12px; padding: 8px 16px;
+            flex-shrink: 0; font-size: 13px; font-weight: bold;
+            border-bottom: 3px solid; transition: all 0.18s ease; }
+
+#mode-bar.mode-struct {
+  background: linear-gradient(90deg, #071a07 0%, #111 60%);
+  border-color: #00c853; color: #00c853;
+}
+#mode-bar.mode-label {
+  background: linear-gradient(90deg, #070718 0%, #111 60%);
+  border-color: #2979ff; color: #6fa3ff;
+}
+.mode-indicator { display: flex; align-items: center; gap: 8px; }
+.mode-dot { width: 10px; height: 10px; border-radius: 50%; background: currentColor;
+            flex-shrink: 0; }
+#mode-bar.mode-label .mode-dot {
+  animation: dotpulse 0.75s ease-in-out infinite alternate;
+}
+@keyframes dotpulse {
+  from { opacity: 1;   transform: scale(1.1); }
+  to   { opacity: 0.2; transform: scale(0.8); }
+}
+.mode-tag { font-size: 11px; font-weight: bold; letter-spacing: 1.5px;
+            text-transform: uppercase; opacity: 0.7; }
+#mode-text { font-size: 13px; font-weight: normal; color: #ccc; }
+#mode-text strong { font-weight: bold; }
+
+#skip-lbl-btn { margin-left: auto; background: #14143a; border: 1px solid #3535a0;
+                color: #88a; padding: 4px 13px; font-size: 12px; cursor: pointer;
+                border-radius: 3px; display: none; }
+#skip-lbl-btn:hover { background: #1e1e50; color: #aaf; }
+#skip-lbl-btn:disabled { opacity: 0.3; pointer-events: none; }
 
 /* ── Layout ── */
 #main { display: flex; flex: 1; overflow: hidden; }
-#canvas-wrap { flex: 1; overflow: auto; padding: 12px; background: #111; }
-#canvas-container { position: relative; display: inline-block; cursor: crosshair; }
+
+/* ── Thumbnail strip ── */
+#thumb-strip { width: 140px; background: #1a1a1a; border-right: 1px solid #303030;
+               display: flex; flex-direction: column; flex-shrink: 0; overflow: hidden; }
+#thumb-header { padding: 6px 10px; font-size: 10px; color: #555; letter-spacing: 1px;
+                text-transform: uppercase; border-bottom: 1px solid #2a2a2a; flex-shrink: 0; }
+#thumb-list { flex: 1; overflow-y: auto; padding: 6px; display: flex;
+              flex-direction: column; gap: 6px; }
+#thumb-list::-webkit-scrollbar { width: 4px; }
+#thumb-list::-webkit-scrollbar-thumb { background: #383838; border-radius: 2px; }
+
+.thumb-item { cursor: pointer; border: 2px solid #262626; border-radius: 4px;
+              overflow: hidden; position: relative; background: #0e0e0e;
+              transition: border-color 0.12s; flex-shrink: 0; }
+.thumb-item:hover  { border-color: #484848; }
+.thumb-item.active { border-color: #00c853; }
+.thumb-item img    { width: 100%; height: auto; display: block;
+                     user-select: none; pointer-events: none; }
+.thumb-foot { position: absolute; bottom: 0; left: 0; right: 0;
+              background: rgba(0,0,0,0.75); padding: 2px 5px;
+              display: flex; justify-content: space-between; align-items: center; }
+.thumb-num  { color: #666; font-size: 9px; }
+.tbadge-done  { color: #6d6; font-size: 9px; font-weight: bold; }
+.tbadge-empty { color: #77a; font-size: 9px; }
+.tbadge-none  { color: #383838; font-size: 9px; }
+
+/* ── Canvas area ── */
+#canvas-wrap { flex: 1; overflow: auto; padding: 12px; background: #0e0e0e;
+               position: relative; }
+#canvas-wrap::-webkit-scrollbar { width: 8px; height: 8px; }
+#canvas-wrap::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
+#canvas-container { position: relative; display: inline-block; }
 canvas { position: absolute; top: 0; left: 0; }
-#base-img { display: block; }
+#base-img { display: block; user-select: none; }
+
+/* Drop overlay */
+#drop-overlay { display: none; position: absolute; inset: 0;
+                background: rgba(0,200,83,0.08); border: 3px dashed #00c853;
+                border-radius: 6px; z-index: 100; pointer-events: none;
+                align-items: center; justify-content: center;
+                flex-direction: column; gap: 8px; font-size: 18px; color: #00c853; }
+
+/* Coord HUD */
+#coord-hud { display: none; position: fixed; background: rgba(0,0,0,0.8);
+             color: #f90; font-size: 10px; padding: 2px 7px; border-radius: 3px;
+             pointer-events: none; z-index: 500; white-space: nowrap;
+             border: 1px solid #2a2a2a; }
+
+/* Welcome */
+#welcome { margin: 20px auto; max-width: 520px; background: #1a1a1a;
+           border: 2px dashed #2a2a2a; padding: 32px; border-radius: 8px;
+           text-align: center; transition: border-color 0.2s, background 0.2s; }
+#welcome.drag-over { border-color: #00c853; background: rgba(0,200,83,0.04); }
+#welcome .drop-icon { font-size: 40px; margin-bottom: 12px; color: #333; }
+#welcome h2 { color: #666; font-size: 15px; font-weight: normal; margin-bottom: 10px; }
+#welcome p  { color: #444; font-size: 12px; line-height: 1.9; }
+#welcome .hl { color: #00c853; }
 
 /* ── Sidebar ── */
-#sidebar { width: 230px; background: #222; border-left: 1px solid #444;
+#sidebar { width: 240px; background: #1a1a1a; border-left: 1px solid #2a2a2a;
            display: flex; flex-direction: column; flex-shrink: 0; }
-#sidebar-header { padding: 9px 12px; font-size: 12px; color: #aaa;
-                  border-bottom: 1px solid #444; display: flex;
-                  justify-content: space-between; align-items: center; }
-#box-list  { flex: 1; overflow-y: auto; padding: 5px; }
-.box-row   { display: flex; align-items: center; gap: 5px; padding: 4px 6px;
-             border-radius: 3px; font-size: 11px; cursor: pointer; }
-.box-row:hover     { background: #2e2e2e; }
-.box-row.selected  { background: #1e2e1e; }
-.box-num    { color: #fa0; min-width: 18px; }
-.box-coords { color: #777; flex: 1; font-size: 10px; }
-.box-del    { color: #844; cursor: pointer; padding: 0 3px; font-size: 13px; }
-.box-del:hover { color: #f66; }
-#sidebar-footer { padding: 9px; border-top: 1px solid #444;
-                  display: flex; flex-direction: column; gap: 6px; }
+#sidebar-header { padding: 8px 12px; font-size: 12px; color: #666;
+                  border-bottom: 1px solid #2a2a2a; display: flex;
+                  justify-content: space-between; align-items: center; flex-shrink: 0; }
+#pair-list { flex: 1; overflow-y: auto; padding: 5px; min-height: 0; }
+#pair-list::-webkit-scrollbar { width: 4px; }
+#pair-list::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 2px; }
 
-/* ── Welcome ── */
-#welcome { margin: 30px; background: #222; border: 2px dashed #444;
-           padding: 28px; border-radius: 6px; text-align: center; }
-#welcome p { color: #888; font-size: 13px; line-height: 1.7; }
-#welcome .hint { color: #555; font-size: 11px; margin-top: 14px; }
+/* Pair cards */
+.pair-card { border: 1px solid #252525; border-radius: 4px; margin-bottom: 5px;
+             overflow: hidden; cursor: pointer; transition: border-color 0.1s; }
+.pair-card:hover   { border-color: #383838; }
+.pair-card.selected { border-color: #2a502a; }
+.pair-card.pending  { border-color: #3030a0; border-style: dashed; }
 
-/* ── Page status badges ── */
-.badge-done  { display: inline-block; background: #1e3a1e; color: #6d6;
-               border-radius: 2px; padding: 0 4px; font-size: 10px; }
-.badge-empty { display: inline-block; background: #2a2a3a; color: #88a;
-               border-radius: 2px; padding: 0 4px; font-size: 10px; }
+.pair-head { background: #222; padding: 3px 7px; display: flex;
+             align-items: center; gap: 5px; font-size: 10px; }
+.pair-idx  { color: #f90; font-size: 10px; min-width: 20px; }
+.pair-del  { margin-left: auto; color: #522; cursor: pointer; padding: 0 3px;
+             font-size: 13px; border-radius: 2px; }
+.pair-del:hover { color: #e44; background: #2a1010; }
+
+.pair-part  { display: flex; align-items: center; gap: 5px; padding: 3px 7px;
+              font-size: 10px; cursor: pointer; border-top: 1px solid #202020; }
+.pair-part:hover { background: #222; }
+.pair-part.sel-part { background: #1a2a1a; }
+.part-dot   { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+.part-label { font-size: 9px; min-width: 36px; }
+.part-coords { color: #444; font-size: 9px; flex: 1; overflow: hidden;
+               text-overflow: ellipsis; white-space: nowrap; }
+.part-skip  { color: #3a3a5a; font-size: 9px; font-style: italic; }
+.part-del   { color: #522; cursor: pointer; padding: 0 2px; font-size: 11px;
+              border-radius: 2px; margin-left: auto; }
+.part-del:hover { color: #e44; background: #2a1010; }
+
+#sidebar-footer { padding: 8px; border-top: 1px solid #252525;
+                  display: flex; flex-direction: column; gap: 5px; flex-shrink: 0; }
+
+/* ── Shortcuts panel ── */
+#shortcuts-panel { border-top: 1px solid #202020; padding: 8px 10px; flex-shrink: 0; }
+.sh-title { color: #444; font-size: 9px; text-transform: uppercase;
+            letter-spacing: 0.8px; margin-bottom: 5px; }
+.sh-grid  { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 4px; }
+.sh-row   { display: flex; align-items: center; gap: 4px; padding: 1px 0; }
+.sh-key   { background: #252525; border: 1px solid #333; color: #888;
+            border-radius: 2px; padding: 0 4px; font-size: 9px;
+            min-width: 28px; text-align: center; white-space: nowrap; }
+.sh-desc  { color: #3e3e3e; font-size: 9px; }
+
+/* ── Badges ── */
+.badge-done  { display: inline-block; background: #162416; color: #5c5; border-radius: 2px; padding: 0 4px; font-size: 10px; }
+.badge-empty { display: inline-block; background: #1e1e30; color: #66a; border-radius: 2px; padding: 0 4px; font-size: 10px; }
 </style>
 </head>
 <body>
 
+<!-- ── Toolbar ─────────────────────────────────────────────────────────────── -->
 <div id="toolbar">
   <label>PDF:</label>
   <input type="file" id="pdf-input" accept=".pdf">
@@ -79,384 +197,953 @@ canvas { position: absolute; top: 0; left: 0; }
 
   <span class="sep">|</span>
 
-  <button id="prev-btn" disabled>← Prev</button>
-  <span id="page-info">No pages</span>
-  <button id="next-btn" disabled>Next →</button>
+  <button id="prev-btn"   disabled>← Prev</button>
+  <span   id="page-info">No pages</span>
+  <button id="next-btn"   disabled>Next →</button>
 
   <span class="sep">|</span>
 
-  <button id="save-btn"  class="save"   disabled>Save (S)</button>
-  <button id="empty-btn" class="empty"  disabled>No Panels (E)</button>
+  <button id="save-btn"   class="save"  disabled>Save (S)</button>
+  <button id="empty-btn"  class="empty" disabled>No Panels (E)</button>
   <button id="undo-btn"                 disabled>Undo (Z)</button>
 
   <span class="sep">|</span>
 
-  <div id="class-toggle">
-    <label>Class:</label>
-    <button class="cls-btn struct active" id="cls-struct" title="Draw chemical structure boxes (0)">Structure (1)</button>
-    <button class="cls-btn lbl"           id="cls-lbl"    title="Draw compound label boxes (1)">Label (2)</button>
+  <div id="zoom-wrap">
+    <button id="zoom-out" disabled title="Zoom out">−</button>
+    <button id="zoom-fit" disabled title="Reset zoom">100%</button>
+    <button id="zoom-in"  disabled title="Zoom in">+</button>
   </div>
+
+  <span class="sep">|</span>
+
+  <label id="auto-adv-wrap" title="After saving, auto-advance to next page">
+    <input type="checkbox" id="auto-adv-chk"> Auto-advance
+  </label>
 
   <span class="sep">|</span>
 
   <button id="export-btn" class="save" disabled>Export &amp; Save All</button>
 
   <span id="progress"></span>
-  <span id="status">Upload a PDF to start</span>
+  <span id="status">Upload a PDF or drop it anywhere to start</span>
 </div>
 
+<!-- ── Mode bar ─────────────────────────────────────────────────────────────── -->
+<div id="mode-bar" class="mode-struct">
+  <div class="mode-indicator">
+    <div class="mode-dot"></div>
+    <span class="mode-tag" id="mode-tag">Structure</span>
+  </div>
+  <span class="sep" style="color:#2a2a2a">│</span>
+  <span id="mode-text">Draw a bounding box around a <strong>chemical structure</strong></span>
+  <button id="skip-lbl-btn" title="Skip label for this structure (K)">Skip label →  (K)</button>
+</div>
+
+<!-- ── Main 3-column layout ─────────────────────────────────────────────────── -->
 <div id="main">
+
+  <!-- Thumbnail strip -->
+  <div id="thumb-strip">
+    <div id="thumb-header">PAGES</div>
+    <div id="thumb-list"></div>
+  </div>
+
+  <!-- Canvas -->
   <div id="canvas-wrap">
+    <div id="drop-overlay">⬇ Drop PDF here</div>
+
     <div id="welcome">
-      <p>Upload a PDF using the toolbar above.<br>
-         Browse pages with ← → arrows, then click and drag to draw<br>
-         a bounding box around each compound panel.</p>
-      <p class="hint">
-        S = save &nbsp;·&nbsp; E = mark page as "no panels" &nbsp;·&nbsp;
-        Z = undo last box &nbsp;·&nbsp; ← → = navigate (auto-saves)
+      <div class="drop-icon">📄</div>
+      <h2>Compound Panel Annotator</h2>
+      <p>
+        <span class="hl">Drop a PDF</span> anywhere, or use the Upload button above.<br><br>
+        Annotations are <span class="hl">paired</span>: draw a structure box, then draw<br>
+        the matching label ID box (or press <span class="hl">K</span> to skip the label).<br><br>
+        <span style="color:#333">Ctrl+Scroll to zoom · Space/MMB to pan · Click box to select+move</span>
       </p>
     </div>
+
     <div id="canvas-container" style="display:none">
       <img id="base-img" draggable="false">
       <canvas id="overlay"></canvas>
     </div>
   </div>
 
+  <!-- Sidebar -->
   <div id="sidebar">
     <div id="sidebar-header">
-      <span id="sidebar-title">Boxes</span>
+      <span id="sidebar-title">Pairs</span>
       <span id="sidebar-badge"></span>
     </div>
-    <div id="box-list"></div>
+    <div id="pair-list"></div>
     <div id="sidebar-footer">
-      <button id="clear-btn" class="danger" disabled>Clear all boxes</button>
+      <button id="clear-btn" class="danger" disabled>Clear all pairs</button>
+    </div>
+    <div id="shortcuts-panel">
+      <div class="sh-title">Keyboard Shortcuts</div>
+      <div class="sh-grid">
+        <div class="sh-row"><span class="sh-key">S</span><span class="sh-desc">Save page</span></div>
+        <div class="sh-row"><span class="sh-key">E</span><span class="sh-desc">No panels</span></div>
+        <div class="sh-row"><span class="sh-key">K</span><span class="sh-desc">Skip label</span></div>
+        <div class="sh-row"><span class="sh-key">Z</span><span class="sh-desc">Undo last</span></div>
+        <div class="sh-row"><span class="sh-key">Del</span><span class="sh-desc">Delete sel.</span></div>
+        <div class="sh-row"><span class="sh-key">Esc</span><span class="sh-desc">Deselect</span></div>
+        <div class="sh-row"><span class="sh-key">← →</span><span class="sh-desc">Navigate</span></div>
+        <div class="sh-row"><span class="sh-key">Ctrl+Scroll</span><span class="sh-desc">Zoom</span></div>
+        <div class="sh-row"><span class="sh-key">Space</span><span class="sh-desc">Pan (drag)</span></div>
+        <div class="sh-row"><span class="sh-key">MMB</span><span class="sh-desc">Pan (drag)</span></div>
+        <div class="sh-row"><span class="sh-key">+/−</span><span class="sh-desc">Zoom btns</span></div>
+      </div>
     </div>
   </div>
+
 </div>
 
+<div id="coord-hud"></div>
+
 <script>
-const DISPLAY_WIDTH = 900;
-const CLASS_COLORS = {0: '#00c853', 1: '#2979ff'};
-const CLASS_NAMES  = {0: 'struct',  1: 'label'};
+// ─── Constants ───────────────────────────────────────────────────────────────
+const COL_STRUCT  = '#00c853';
+const COL_LABEL   = '#2979ff';
+const HANDLE_R    = 5;    // handle half-size, canvas pixels
+const MIN_BOX_IMG = 8;    // min box side, image pixels
 
-// State
+// ─── State ───────────────────────────────────────────────────────────────────
 let pages = [], pageIdx = 0;
-let boxes = [], selectedBox = -1;
-let imgW = 0, imgH = 0, scale = 1;
-let isDrawing = false, sx = 0, sy = 0, cx = 0, cy = 0;
+
+// pairs: [{struct_bbox:[x1,y1,x2,y2], label_bbox:[...]|null, label_text:'', smiles:''}]
+let pairs = [];
+
+// annotMode: 'struct' → draw next structure
+//            'label'  → draw label for pairs[pairs.length-1] (last pair is pending)
+let annotMode = 'struct';
+
+let selectedPair = -1;
+let selectedPart = null;   // 'struct' | 'label'
+let imgW = 0, imgH = 0, baseScale = 1, zoom = 1;
 let dirty = false;
-let currentClass = 0;
+let autoAdvance = false;
 
-// DOM
-const canvas   = document.getElementById('overlay');
-const ctx      = canvas.getContext('2d');
-const img      = document.getElementById('base-img');
-const status   = document.getElementById('status');
-const pageInfo = document.getElementById('page-info');
-const progress = document.getElementById('progress');
-const sidebarTitle = document.getElementById('sidebar-title');
-const sidebarBadge = document.getElementById('sidebar-badge');
+// Interaction
+let dragState = { mode: null };  // 'drawing'|'moving'|'resizing'|'panning'
+let spaceDown = false;
+let hoverHit  = { type: null };
+let lastImgX  = 0, lastImgY = 0;
 
-// ── Class toggle ──────────────────────────────────────────────────────────────
-document.getElementById('cls-struct').addEventListener('click', () => setClass(0));
-document.getElementById('cls-lbl').addEventListener('click',    () => setClass(1));
+// Animation (for pulsing pending struct)
+let raf = null;
 
-function setClass(id) {
-  currentClass = id;
-  document.getElementById('cls-struct').classList.toggle('active', id === 0);
-  document.getElementById('cls-lbl').classList.toggle('active',    id === 1);
+// ─── DOM refs ────────────────────────────────────────────────────────────────
+const canvas     = document.getElementById('overlay');
+const ctx        = canvas.getContext('2d');
+const img        = document.getElementById('base-img');
+const canvasWrap = document.getElementById('canvas-wrap');
+const canvasCont = document.getElementById('canvas-container');
+const coordHud   = document.getElementById('coord-hud');
+const statusEl   = document.getElementById('status');
+const pageInfo   = document.getElementById('page-info');
+const progressEl = document.getElementById('progress');
+const sideBadge  = document.getElementById('sidebar-badge');
+const thumbList  = document.getElementById('thumb-list');
+const zoomFitBtn = document.getElementById('zoom-fit');
+const welcome    = document.getElementById('welcome');
+const dropOverlay = document.getElementById('drop-overlay');
+const modeBar    = document.getElementById('mode-bar');
+const modeTag    = document.getElementById('mode-tag');
+const modeText   = document.getElementById('mode-text');
+const skipBtn    = document.getElementById('skip-lbl-btn');
+
+// ─── Mode state machine ──────────────────────────────────────────────────────
+function enterStructMode() {
+  annotMode = 'struct';
+  modeBar.className  = 'mode-struct';
+  modeTag.textContent = 'Structure';
+  modeText.innerHTML  = 'Draw a bounding box around a <strong style="color:#00c853">chemical structure</strong>';
+  skipBtn.style.display = 'none';
+  canvas.style.cursor   = 'crosshair';
+  stopAnim();
 }
 
-// Keyboard shortcut: 1 = structure, 2 = label
-document.addEventListener('keydown', async e => {
-  if (e.target.tagName === 'INPUT') return;
-  if (e.key === '1') { setClass(0); return; }
-  if (e.key === '2') { setClass(1); return; }
-});
+function enterLabelMode() {
+  annotMode = 'label';
+  const idx = pairs.length - 1;
+  modeBar.className  = 'mode-label';
+  modeTag.textContent = 'Label';
+  modeText.innerHTML  = `Draw the <strong style="color:#2979ff">label ID box</strong> for structure <strong>#${idx}</strong>`;
+  skipBtn.style.display = 'inline-block';
+  canvas.style.cursor   = 'crosshair';
+  startAnim();
+}
 
-// ── Upload ────────────────────────────────────────────────────────────────────
+function skipLabel() {
+  if (annotMode !== 'label') return;
+  // Last pair keeps label_bbox: null
+  dirty = true;
+  enterStructMode();
+  renderPairList();
+  setStatus('Label skipped — draw the next structure.', 'warn');
+}
+
+skipBtn.addEventListener('click', skipLabel);
+
+// ─── Animation (pulsing pending struct) ──────────────────────────────────────
+function startAnim() {
+  if (raf) return;
+  function tick() {
+    if (annotMode === 'label') { redraw(); raf = requestAnimationFrame(tick); }
+    else raf = null;
+  }
+  raf = requestAnimationFrame(tick);
+}
+function stopAnim() {
+  if (raf) { cancelAnimationFrame(raf); raf = null; }
+  redraw();
+}
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+function ds() { return baseScale * zoom; }
+
+function toImgCoords(clientX, clientY) {
+  const r = canvas.getBoundingClientRect();
+  return { imgX: (clientX - r.left) / ds(), imgY: (clientY - r.top) / ds() };
+}
+
+function setStatus(msg, level = 'ok') {
+  statusEl.textContent = msg;
+  statusEl.style.color = { ok:'#8e8', warn:'#f90', err:'#e55', info:'#88f' }[level] ?? '#ccc';
+}
+
+function enableNav(on) {
+  ['prev-btn','next-btn','save-btn','empty-btn','undo-btn','clear-btn',
+   'export-btn','zoom-in','zoom-out','zoom-fit']
+    .forEach(id => { const el = document.getElementById(id); if (el) el.disabled = !on; });
+}
+
+// ─── Upload & Drag-and-drop ──────────────────────────────────────────────────
 document.getElementById('upload-btn').addEventListener('click', async () => {
   const file = document.getElementById('pdf-input').files[0];
   if (!file) { setStatus('Select a PDF first.', 'warn'); return; }
+  await uploadFile(file);
+});
+
+async function uploadFile(file) {
   setStatus('Converting PDF…', 'info');
   const fd = new FormData();
   fd.append('pdf', file);
-  const r = await fetch('/upload', {method: 'POST', body: fd});
+  const r    = await fetch('/upload', { method: 'POST', body: fd });
   const data = await r.json();
   if (data.error) { setStatus(data.error, 'err'); return; }
   await refreshPages(0);
-  setStatus(`Loaded ${data.pages.length} pages from "${file.name}".`, 'ok');
+  setStatus(`Loaded ${data.pages.length} page(s) from "${file.name}".`, 'ok');
+}
+
+['dragenter','dragover'].forEach(evt => {
+  canvasWrap.addEventListener(evt, e => {
+    e.preventDefault(); e.stopPropagation();
+    dropOverlay.style.display = 'flex';
+    welcome.classList.add('drag-over');
+  });
+});
+['dragleave','dragend'].forEach(evt => {
+  canvasWrap.addEventListener(evt, e => {
+    if (!canvasWrap.contains(e.relatedTarget)) {
+      dropOverlay.style.display = 'none';
+      welcome.classList.remove('drag-over');
+    }
+  });
+});
+canvasWrap.addEventListener('drop', async e => {
+  e.preventDefault();
+  dropOverlay.style.display = 'none';
+  welcome.classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if (!file || !file.name.toLowerCase().endsWith('.pdf')) {
+    setStatus('Please drop a PDF file.', 'warn'); return;
+  }
+  await uploadFile(file);
 });
 
+// ─── Pages & Navigation ──────────────────────────────────────────────────────
 async function refreshPages(idx) {
   const r = await fetch('/pages');
   pages = await r.json();
   if (!pages.length) return;
   enableNav(true);
+  renderThumbnails();
   pageIdx = Math.max(0, Math.min(idx, pages.length - 1));
   await loadPage(pageIdx);
 }
 
-// ── Navigation ────────────────────────────────────────────────────────────────
 document.getElementById('prev-btn').addEventListener('click', () => navigate(-1));
 document.getElementById('next-btn').addEventListener('click', () => navigate(1));
 
 async function navigate(dir) {
-  if (dirty) await saveCurrent();
-  pageIdx = Math.max(0, Math.min(pages.length - 1, pageIdx + dir));
+  if (dirty) await saveCurrent({ advance: false });
+  const next = Math.max(0, Math.min(pages.length - 1, pageIdx + dir));
+  if (next === pageIdx) return;
+  pageIdx = next;
+  await loadPage(pageIdx);
+}
+
+async function navigateTo(idx) {
+  if (idx === pageIdx || !pages.length) return;
+  if (dirty) await saveCurrent({ advance: false });
+  pageIdx = idx;
   await loadPage(pageIdx);
 }
 
 async function loadPage(idx) {
   const p = pages[idx];
   pageInfo.textContent = `Page ${idx + 1} / ${pages.length}`;
-  sidebarTitle.textContent = `Boxes — ${idx + 1}/${pages.length}`;
   updateProgress();
 
-  // Swap image
-  document.getElementById('welcome').style.display = 'none';
-  document.getElementById('canvas-container').style.display = 'inline-block';
+  welcome.style.display    = 'none';
+  canvasCont.style.display = 'inline-block';
 
-  await new Promise(resolve => {
-    img.onload = resolve;
-    img.src = `/image/${p.id}?t=${Date.now()}`;
-  });
+  await new Promise(resolve => { img.onload = resolve; img.src = `/image/${p.id}`; });
 
-  // Scale canvas to fit display width
-  const dw = Math.min(DISPLAY_WIDTH, p.w);
-  scale = dw / p.w;
-  const dh = Math.round(p.h * scale);
-  img.style.width  = dw + 'px';
-  img.style.height = dh + 'px';
-  canvas.width  = dw;
-  canvas.height = dh;
+  const availW = canvasWrap.clientWidth - 24;
+  baseScale = Math.min(availW, p.w) / p.w;
+  zoom = 1;
   imgW = p.w; imgH = p.h;
+  updateCanvasSize();
 
-  // Load existing annotations
   const ann = await fetch(`/annotations/${p.id}`).then(r => r.json());
-  boxes       = ann.boxes || [];
-  dirty       = false;
-  selectedBox = -1;
+  pairs        = ann.pairs || [];
+  dirty        = false;
+  selectedPair = -1;
+  selectedPart = null;
+  dragState    = { mode: null };
+  hoverHit     = { type: null };
+  enterStructMode();   // always start fresh in struct mode
 
-  // Sidebar badge: annotated state
-  if (ann.annotated && boxes.length === 0) {
-    sidebarBadge.innerHTML = '<span class="badge-empty">∅ empty</span>';
-  } else if (ann.annotated) {
-    sidebarBadge.innerHTML = `<span class="badge-done">${boxes.length} box(es)</span>`;
-  } else {
-    sidebarBadge.textContent = '';
-  }
-
-  redraw();
-  renderBoxList();
-  setStatus(ann.annotated
-    ? `${boxes.length} box(es) on this page.`
-    : 'Not yet annotated.', 'ok');
+  updateSidebarBadge(ann.annotated, pairs.length);
+  renderPairList();
+  updateThumbActive();
+  scrollThumbIntoView(idx);
+  document.getElementById('prev-btn').disabled = idx === 0;
+  document.getElementById('next-btn').disabled = idx === pages.length - 1;
+  setStatus(ann.annotated ? `${pairs.length} pair(s) on this page.` : 'Not yet annotated.', 'ok');
 }
 
-// ── Drawing ───────────────────────────────────────────────────────────────────
-canvas.addEventListener('mousedown', e => {
-  if (e.button !== 0) return;
-  isDrawing = true;
-  const r = canvas.getBoundingClientRect();
-  sx = cx = e.clientX - r.left;
-  sy = cy = e.clientY - r.top;
-});
+function updateSidebarBadge(annotated, n) {
+  if (annotated && n === 0)
+    sideBadge.innerHTML = '<span class="badge-empty">∅ empty</span>';
+  else if (annotated)
+    sideBadge.innerHTML = `<span class="badge-done">${n} pair(s)</span>`;
+  else
+    sideBadge.textContent = '';
+}
 
-canvas.addEventListener('mousemove', e => {
-  if (!isDrawing) return;
-  const r = canvas.getBoundingClientRect();
-  cx = e.clientX - r.left;
-  cy = e.clientY - r.top;
-  redraw();
-});
+// ─── Thumbnails ───────────────────────────────────────────────────────────────
+function thumbBadgeHtml(p) {
+  if (!p.annotated)  return '<span class="tbadge-none">?</span>';
+  if (p.n_pairs === 0) return '<span class="tbadge-empty">∅</span>';
+  return `<span class="tbadge-done">${p.n_pairs}</span>`;
+}
 
-canvas.addEventListener('mouseup', e => {
-  if (!isDrawing) return;
-  isDrawing = false;
-  const r = canvas.getBoundingClientRect();
-  const ex = e.clientX - r.left, ey = e.clientY - r.top;
-  if (Math.abs(ex - sx) > 12 && Math.abs(ey - sy) > 12) {
-    boxes.push({
-      x1: Math.round(Math.min(sx, ex) / scale),
-      y1: Math.round(Math.min(sy, ey) / scale),
-      x2: Math.round(Math.max(sx, ex) / scale),
-      y2: Math.round(Math.max(sy, ey) / scale),
-      class_id: currentClass,
-    });
-    dirty = true;
-    renderBoxList();
-    setStatus(`${boxes.length} box(es). Press S to save.`, 'warn');
-  }
-  redraw();
-});
-
-function redraw() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-  boxes.forEach((b, i) => {
-    const x = b.x1 * scale, y = b.y1 * scale;
-    const w = (b.x2 - b.x1) * scale, h = (b.y2 - b.y1) * scale;
-    const baseColor = CLASS_COLORS[b.class_id ?? 0];
-    ctx.strokeStyle = i === selectedBox ? '#ffff00' : baseColor;
-    ctx.lineWidth   = i === selectedBox ? 2.5 : 1.5;
-    ctx.strokeRect(x, y, w, h);
-    ctx.fillStyle = ctx.strokeStyle;
-    ctx.font = 'bold 11px monospace';
-    ctx.fillText(`${i}:${CLASS_NAMES[b.class_id ?? 0]}`, x + 3, y + 13);
+function renderThumbnails() {
+  thumbList.innerHTML = '';
+  pages.forEach((p, i) => {
+    const item = document.createElement('div');
+    item.className   = 'thumb-item' + (i === pageIdx ? ' active' : '');
+    item.dataset.idx = i;
+    const timg = document.createElement('img');
+    timg.src = `/image/${p.id}`; timg.loading = 'lazy'; timg.draggable = false;
+    const foot = document.createElement('div');
+    foot.className = 'thumb-foot';
+    foot.innerHTML = `<span class="thumb-num">${i+1}</span>${thumbBadgeHtml(p)}`;
+    item.appendChild(timg); item.appendChild(foot);
+    item.addEventListener('click', () => navigateTo(i));
+    thumbList.appendChild(item);
   });
+  document.getElementById('thumb-header').textContent = `PAGES (${pages.length})`;
+}
 
-  if (isDrawing) {
-    ctx.strokeStyle = '#ff4444';
-    ctx.lineWidth = 1.5;
-    ctx.setLineDash([5, 3]);
-    ctx.strokeRect(sx, sy, cx - sx, cy - sy);
-    ctx.setLineDash([]);
+function updateThumbBadges() {
+  thumbList.querySelectorAll('.thumb-item').forEach(el => {
+    const i = parseInt(el.dataset.idx);
+    if (isNaN(i) || !pages[i]) return;
+    el.querySelector('.thumb-foot').innerHTML =
+      `<span class="thumb-num">${i+1}</span>${thumbBadgeHtml(pages[i])}`;
+  });
+}
+
+function updateThumbActive() {
+  thumbList.querySelectorAll('.thumb-item').forEach(el =>
+    el.classList.toggle('active', parseInt(el.dataset.idx) === pageIdx));
+}
+
+function scrollThumbIntoView(idx) {
+  const el = thumbList.querySelector(`.thumb-item[data-idx="${idx}"]`);
+  if (el) el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+}
+
+// ─── Zoom ─────────────────────────────────────────────────────────────────────
+function updateCanvasSize() {
+  const d = ds();
+  const dw = Math.round(imgW * d), dh = Math.round(imgH * d);
+  img.style.width  = dw + 'px'; img.style.height = dh + 'px';
+  canvas.width = dw; canvas.height = dh;
+  canvasCont.style.width = dw + 'px'; canvasCont.style.height = dh + 'px';
+  zoomFitBtn.textContent = Math.round(zoom * 100) + '%';
+}
+
+document.getElementById('zoom-in').addEventListener('click',  () => doZoom(1.3,   null));
+document.getElementById('zoom-out').addEventListener('click', () => doZoom(1/1.3, null));
+document.getElementById('zoom-fit').addEventListener('click', () => { zoom = 1; updateCanvasSize(); redraw(); });
+
+function doZoom(factor, e) {
+  if (!imgW) return;
+  const oldDs = ds(), wrapRect = canvasWrap.getBoundingClientRect();
+  const scrollL = canvasWrap.scrollLeft, scrollT = canvasWrap.scrollTop;
+  const pivCX = e ? e.clientX : wrapRect.left + wrapRect.width  / 2;
+  const pivCY = e ? e.clientY : wrapRect.top  + wrapRect.height / 2;
+  const imgPX = (scrollL + pivCX - wrapRect.left - 12) / oldDs;
+  const imgPY = (scrollT + pivCY - wrapRect.top  - 12) / oldDs;
+  zoom = Math.max(0.15, Math.min(10, zoom * factor));
+  updateCanvasSize();
+  const nd = ds();
+  canvasWrap.scrollLeft = imgPX * nd - (pivCX - wrapRect.left - 12);
+  canvasWrap.scrollTop  = imgPY * nd - (pivCY - wrapRect.top  - 12);
+  redraw();
+}
+
+canvasWrap.addEventListener('wheel', e => {
+  if (!imgW || !e.ctrlKey) return;
+  e.preventDefault();
+  doZoom(e.deltaY < 0 ? 1.15 : 1/1.15, e);
+}, { passive: false });
+
+// ─── Hit testing ──────────────────────────────────────────────────────────────
+function getHandlesForBbox([x1, y1, x2, y2]) {
+  const mx = (x1+x2)/2, my = (y1+y2)/2;
+  return { nw:[x1,y1], n:[mx,y1], ne:[x2,y1], e:[x2,my],
+           se:[x2,y2], s:[mx,y2], sw:[x1,y2], w:[x1,my] };
+}
+
+function hitTest(imgX, imgY) {
+  const HR = HANDLE_R / ds();
+  for (let i = pairs.length - 1; i >= 0; i--) {
+    const pair = pairs[i];
+    for (const part of ['label', 'struct']) {
+      const bbox = part === 'struct' ? pair.struct_bbox : pair.label_bbox;
+      if (!bbox) continue;
+      const [x1,y1,x2,y2] = bbox;
+      // Handles only on selected pair+part
+      if (i === selectedPair && part === selectedPart) {
+        for (const [name, [hx,hy]] of Object.entries(getHandlesForBbox(bbox))) {
+          if (Math.abs(imgX-hx) <= HR && Math.abs(imgY-hy) <= HR)
+            return { type:'handle', pairIdx:i, part, handle:name };
+        }
+      }
+      if (imgX >= x1 && imgX <= x2 && imgY >= y1 && imgY <= y2)
+        return { type:'move', pairIdx:i, part };
+    }
+  }
+  return { type: null };
+}
+
+// ─── Cursor ───────────────────────────────────────────────────────────────────
+const HANDLE_CURSORS = {
+  nw:'nw-resize', n:'n-resize', ne:'ne-resize', e:'e-resize',
+  se:'se-resize', s:'s-resize', sw:'sw-resize', w:'w-resize'
+};
+
+function updateCursor(hit) {
+  if (spaceDown) {
+    canvas.style.cursor = dragState.mode === 'panning' ? 'grabbing' : 'grab';
+  } else if (hit.type === 'handle') {
+    canvas.style.cursor = HANDLE_CURSORS[hit.handle] ?? 'crosshair';
+  } else if (hit.type === 'move') {
+    canvas.style.cursor = 'move';
+  } else {
+    canvas.style.cursor = 'crosshair';
   }
 }
 
-// ── Sidebar box list ──────────────────────────────────────────────────────────
-function renderBoxList() {
-  const list = document.getElementById('box-list');
-  list.innerHTML = '';
-  if (!boxes.length) {
-    list.innerHTML = '<div style="color:#555;font-size:11px;padding:8px">No boxes drawn</div>';
+// ─── Canvas interaction ───────────────────────────────────────────────────────
+canvas.addEventListener('mousedown', e => {
+  if (!imgW) return;
+
+  // Pan: middle button or Space+LMB
+  if (e.button === 1 || (e.button === 0 && spaceDown)) {
+    e.preventDefault();
+    dragState = { mode:'panning', startCX:e.clientX, startCY:e.clientY,
+                  startSL:canvasWrap.scrollLeft, startST:canvasWrap.scrollTop };
+    canvas.style.cursor = 'grabbing';
     return;
   }
-  boxes.forEach((b, i) => {
-    const cls = b.class_id ?? 0;
-    const clsColor = CLASS_COLORS[cls];
-    const clsName  = CLASS_NAMES[cls];
-    const el = document.createElement('div');
-    el.className = 'box-row' + (i === selectedBox ? ' selected' : '');
-    el.innerHTML =
-      `<span class="box-num">${i}</span>` +
-      `<span style="color:${clsColor};font-size:10px;min-width:42px">${clsName}</span>` +
-      `<span class="box-coords">${b.x1},${b.y1}→${b.x2},${b.y2}</span>` +
-      `<span class="box-del" title="Delete box ${i}">×</span>`;
-    el.querySelector('.box-del').addEventListener('click', e => {
-      e.stopPropagation(); deleteBox(i);
+  if (e.button !== 0) return;
+
+  const { imgX, imgY } = toImgCoords(e.clientX, e.clientY);
+  const hit = hitTest(imgX, imgY);
+
+  if (hit.type === 'handle') {
+    selectedPair = hit.pairIdx; selectedPart = hit.part;
+    const bbox = hit.part === 'struct' ? pairs[hit.pairIdx].struct_bbox
+                                       : pairs[hit.pairIdx].label_bbox;
+    dragState = { mode:'resizing', pairIdx:hit.pairIdx, part:hit.part,
+                  handle:hit.handle, startImgX:imgX, startImgY:imgY,
+                  origBbox:[...bbox] };
+    renderPairList(); return;
+  }
+
+  if (hit.type === 'move') {
+    selectedPair = hit.pairIdx; selectedPart = hit.part;
+    const bbox = hit.part === 'struct' ? pairs[hit.pairIdx].struct_bbox
+                                       : pairs[hit.pairIdx].label_bbox;
+    dragState = { mode:'moving', pairIdx:hit.pairIdx, part:hit.part,
+                  startImgX:imgX, startImgY:imgY, origBbox:[...bbox] };
+    renderPairList(); return;
+  }
+
+  // Start drawing — clear selection
+  selectedPair = -1; selectedPart = null;
+  dragState = { mode:'drawing', startImgX:imgX, startImgY:imgY,
+                curImgX:imgX, curImgY:imgY };
+  redraw();
+});
+
+window.addEventListener('mousemove', e => {
+  if (!imgW) return;
+  const { imgX, imgY } = toImgCoords(e.clientX, e.clientY);
+  lastImgX = imgX; lastImgY = imgY;
+
+  const inCanvas = e.target === canvas || canvasCont.contains(e.target);
+  coordHud.style.display = inCanvas ? 'block' : 'none';
+  if (inCanvas) {
+    coordHud.style.left = (e.clientX + 14) + 'px';
+    coordHud.style.top  = (e.clientY - 20) + 'px';
+    coordHud.textContent = `x: ${Math.round(imgX)}  y: ${Math.round(imgY)}`;
+  }
+
+  if (dragState.mode === 'panning') {
+    canvasWrap.scrollLeft = dragState.startSL - (e.clientX - dragState.startCX);
+    canvasWrap.scrollTop  = dragState.startST - (e.clientY - dragState.startCY);
+    return;
+  }
+
+  if (dragState.mode === 'drawing') {
+    dragState.curImgX = imgX; dragState.curImgY = imgY;
+    if (annotMode === 'struct') redraw(); // anim loop handles 'label' mode
+    else if (!raf) redraw();
+    return;
+  }
+
+  if (dragState.mode === 'moving') {
+    const dx = imgX - dragState.startImgX, dy = imgY - dragState.startImgY;
+    const [ox1,oy1,ox2,oy2] = dragState.origBbox;
+    const bw = ox2-ox1, bh = oy2-oy1;
+    const nx1 = Math.max(0, Math.min(imgW-bw, ox1+dx));
+    const ny1 = Math.max(0, Math.min(imgH-bh, oy1+dy));
+    const nb   = [nx1, ny1, nx1+bw, ny1+bh];
+    if (dragState.part === 'struct') pairs[dragState.pairIdx].struct_bbox = nb;
+    else                             pairs[dragState.pairIdx].label_bbox  = nb;
+    dirty = true;
+    if (!raf) redraw(); return;
+  }
+
+  if (dragState.mode === 'resizing') {
+    const dx = imgX - dragState.startImgX, dy = imgY - dragState.startImgY;
+    const nb = applyResize(dragState.origBbox, dragState.handle, dx, dy);
+    if (dragState.part === 'struct') pairs[dragState.pairIdx].struct_bbox = nb;
+    else                             pairs[dragState.pairIdx].label_bbox  = nb;
+    dirty = true;
+    if (!raf) redraw(); return;
+  }
+
+  if (inCanvas) { hoverHit = hitTest(imgX, imgY); updateCursor(hoverHit); }
+});
+
+window.addEventListener('mouseup', e => {
+  if (!dragState.mode) return;
+
+  if (dragState.mode === 'drawing') {
+    const { startImgX, startImgY, curImgX, curImgY } = dragState;
+    if (Math.abs(curImgX-startImgX) > MIN_BOX_IMG && Math.abs(curImgY-startImgY) > MIN_BOX_IMG) {
+      const bbox = [
+        Math.round(Math.min(startImgX, curImgX)), Math.round(Math.min(startImgY, curImgY)),
+        Math.round(Math.max(startImgX, curImgX)), Math.round(Math.max(startImgY, curImgY)),
+      ];
+
+      if (annotMode === 'struct') {
+        pairs.push({ struct_bbox: bbox, label_bbox: null, label_text: '', smiles: '' });
+        selectedPair = pairs.length - 1;
+        selectedPart = 'struct';
+        dirty = true;
+        renderPairList();
+        enterLabelMode();
+        setStatus(`Structure #${pairs.length-1} drawn — now draw its label box.`, 'warn');
+      } else {
+        // Complete the pending pair
+        const pIdx = pairs.length - 1;
+        pairs[pIdx].label_bbox = bbox;
+        selectedPair = pIdx;
+        selectedPart = 'label';
+        dirty = true;
+        renderPairList();
+        enterStructMode();
+        setStatus(`Pair #${pIdx} complete. Draw next structure or press S to save.`, 'ok');
+      }
+    }
+  } else if (dragState.mode === 'moving' || dragState.mode === 'resizing') {
+    // Round and normalize
+    const pair = pairs[dragState.pairIdx];
+    const key  = dragState.part === 'struct' ? 'struct_bbox' : 'label_bbox';
+    const b    = [...pair[key]];
+    if (b[0] > b[2]) { const t=b[0]; b[0]=b[2]; b[2]=t; }
+    if (b[1] > b[3]) { const t=b[1]; b[1]=b[3]; b[3]=t; }
+    pair[key] = b.map(Math.round);
+    if (dirty) {
+      renderPairList();
+      setStatus(`${pairs.length} pair(s). Press S to save.`, 'warn');
+    }
+  }
+
+  dragState = { mode: null };
+  hoverHit  = hitTest(lastImgX, lastImgY);
+  updateCursor(hoverHit);
+  if (!raf) redraw();
+});
+
+canvas.addEventListener('mousedown', e => { if (e.button === 1) e.preventDefault(); });
+canvasCont.addEventListener('mouseleave', () => { coordHud.style.display = 'none'; });
+
+// ─── Resize helper ────────────────────────────────────────────────────────────
+function applyResize([ox1,oy1,ox2,oy2], handle, dx, dy) {
+  let x1=ox1, y1=oy1, x2=ox2, y2=oy2;
+  const M = MIN_BOX_IMG;
+  if (handle.includes('n')) y1 = Math.max(0,    Math.min(y2-M, oy1+dy));
+  if (handle.includes('s')) y2 = Math.min(imgH, Math.max(y1+M, oy2+dy));
+  if (handle.includes('w')) x1 = Math.max(0,    Math.min(x2-M, ox1+dx));
+  if (handle.includes('e')) x2 = Math.min(imgW, Math.max(x1+M, ox2+dx));
+  return [x1, y1, x2, y2];
+}
+
+// ─── Redraw ───────────────────────────────────────────────────────────────────
+function redraw() {
+  const d = ds();
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  pairs.forEach((pair, i) => {
+    const isPending  = annotMode === 'label' && i === pairs.length - 1;
+    const isSel      = i === selectedPair;
+    const t          = Date.now();
+
+    // Draw struct box
+    if (pair.struct_bbox) {
+      const selStruct = isSel && selectedPart === 'struct';
+      drawBox(pair.struct_bbox, COL_STRUCT, selStruct, isPending, d);
+    }
+
+    // Draw label box
+    if (pair.label_bbox) {
+      const selLabel = isSel && selectedPart === 'label';
+      drawBox(pair.label_bbox, COL_LABEL, selLabel, false, d);
+      // Connector line between boxes
+      drawConnector(pair.struct_bbox, pair.label_bbox, d);
+    }
+
+    // Pair index tag (top-left of struct)
+    const [sx1,sy1] = pair.struct_bbox;
+    ctx.font = 'bold 10px monospace';
+    ctx.fillStyle = '#000';
+    ctx.fillRect(sx1*d, sy1*d - 13, 20, 13);
+    ctx.fillStyle = isPending ? '#aaf' : isSel ? '#ff0' : '#f90';
+    ctx.fillText(`#${i}`, sx1*d + 2, sy1*d - 2);
+
+    // Handles on selected part
+    if (isSel && selectedPart === 'struct' && pair.struct_bbox)
+      drawHandles(pair.struct_bbox, d);
+    if (isSel && selectedPart === 'label' && pair.label_bbox)
+      drawHandles(pair.label_bbox, d);
+  });
+
+  // In-progress rubber band
+  if (dragState.mode === 'drawing') {
+    const { startImgX, startImgY, curImgX, curImgY } = dragState;
+    const color = annotMode === 'struct' ? COL_STRUCT : COL_LABEL;
+    const rx = Math.min(startImgX, curImgX)*d, ry = Math.min(startImgY, curImgY)*d;
+    const rw = Math.abs(curImgX-startImgX)*d,  rh = Math.abs(curImgY-startImgY)*d;
+    ctx.strokeStyle = color; ctx.lineWidth = 1.5;
+    ctx.setLineDash([5,3]); ctx.strokeRect(rx, ry, rw, rh); ctx.setLineDash([]);
+    // Fill tint
+    ctx.fillStyle = annotMode === 'struct' ? 'rgba(0,200,83,0.07)' : 'rgba(41,121,255,0.07)';
+    ctx.fillRect(rx, ry, rw, rh);
+  }
+}
+
+function drawBox(bbox, color, selected, pending, d) {
+  const [x1,y1,x2,y2] = bbox;
+  const x=x1*d, y=y1*d, w=(x2-x1)*d, h=(y2-y1)*d;
+
+  if (pending) {
+    // Pulsing white border
+    const alpha = 0.35 + 0.5 * Math.sin(Date.now() / 300);
+    ctx.strokeStyle = `rgba(180,180,255,${alpha})`;
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6,3]);
+    ctx.fillStyle = `rgba(41,121,255,${alpha * 0.12})`;
+  } else {
+    ctx.strokeStyle = selected ? '#ffff00' : color;
+    ctx.lineWidth   = selected ? 2.5 : 1.5;
+    ctx.setLineDash([]);
+    ctx.fillStyle   = selected ? 'rgba(255,255,0,0.06)' : 'rgba(255,255,255,0.02)';
+  }
+  ctx.fillRect(x, y, w, h);
+  ctx.strokeRect(x, y, w, h);
+  ctx.setLineDash([]);
+}
+
+function drawConnector(sbbox, lbbox, d) {
+  if (!sbbox || !lbbox) return;
+  const scx = ((sbbox[0]+sbbox[2])/2)*d, scy = (sbbox[3])*d;
+  const lcx = ((lbbox[0]+lbbox[2])/2)*d, lcy = (lbbox[1])*d;
+  ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([3,4]);
+  ctx.beginPath(); ctx.moveTo(scx, scy); ctx.lineTo(lcx, lcy); ctx.stroke();
+  ctx.setLineDash([]);
+}
+
+function drawHandles(bbox, d) {
+  ctx.fillStyle = '#ffff00'; ctx.strokeStyle = '#000'; ctx.lineWidth = 1;
+  for (const [hx,hy] of Object.values(getHandlesForBbox(bbox))) {
+    const cx=hx*d, cy=hy*d;
+    ctx.fillRect(cx-HANDLE_R, cy-HANDLE_R, HANDLE_R*2, HANDLE_R*2);
+    ctx.strokeRect(cx-HANDLE_R, cy-HANDLE_R, HANDLE_R*2, HANDLE_R*2);
+  }
+}
+
+// ─── Sidebar pair list ────────────────────────────────────────────────────────
+function renderPairList() {
+  const list = document.getElementById('pair-list');
+  list.innerHTML = '';
+  if (!pairs.length) {
+    list.innerHTML = '<div style="color:#333;font-size:11px;padding:10px 8px">No pairs drawn</div>';
+    return;
+  }
+  pairs.forEach((pair, i) => {
+    const isPending = annotMode === 'label' && i === pairs.length - 1;
+    const isSel     = i === selectedPair;
+
+    const card = document.createElement('div');
+    card.className = 'pair-card' + (isSel ? ' selected' : '') + (isPending ? ' pending' : '');
+
+    // Header row
+    const head = document.createElement('div');
+    head.className = 'pair-head';
+    head.innerHTML =
+      `<span class="pair-idx">#${i}</span>` +
+      (isPending ? '<span style="color:#5560aa;font-size:9px">pending label…</span>' : '') +
+      `<span class="pair-del" title="Delete pair ${i}">×</span>`;
+    head.querySelector('.pair-del').addEventListener('click', e => {
+      e.stopPropagation(); deletePair(i);
     });
-    el.addEventListener('click', () => {
-      selectedBox = selectedBox === i ? -1 : i;
-      renderBoxList(); redraw();
+    card.appendChild(head);
+
+    // Struct row
+    const srow = document.createElement('div');
+    srow.className = 'pair-part' + (isSel && selectedPart === 'struct' ? ' sel-part' : '');
+    const sb = pair.struct_bbox;
+    srow.innerHTML =
+      `<span class="part-dot" style="background:${COL_STRUCT}"></span>` +
+      `<span class="part-label" style="color:${COL_STRUCT}">struct</span>` +
+      `<span class="part-coords">${sb[0]},${sb[1]}→${sb[2]},${sb[3]}</span>`;
+    srow.addEventListener('click', e => {
+      e.stopPropagation();
+      selectedPair = i; selectedPart = 'struct';
+      renderPairList(); redraw();
     });
-    list.appendChild(el);
+    card.appendChild(srow);
+
+    // Label row
+    const lrow = document.createElement('div');
+    lrow.className = 'pair-part' + (isSel && selectedPart === 'label' ? ' sel-part' : '');
+    if (pair.label_bbox) {
+      const lb = pair.label_bbox;
+      lrow.innerHTML =
+        `<span class="part-dot" style="background:${COL_LABEL}"></span>` +
+        `<span class="part-label" style="color:${COL_LABEL}">label</span>` +
+        `<span class="part-coords">${lb[0]},${lb[1]}→${lb[2]},${lb[3]}</span>` +
+        `<span class="part-del" title="Clear label bbox">×</span>`;
+      lrow.querySelector('.part-del').addEventListener('click', e => {
+        e.stopPropagation(); clearLabel(i);
+      });
+      lrow.addEventListener('click', e => {
+        e.stopPropagation();
+        selectedPair = i; selectedPart = 'label';
+        renderPairList(); redraw();
+      });
+    } else {
+      lrow.innerHTML =
+        `<span class="part-dot" style="background:#333;opacity:0.5"></span>` +
+        `<span class="part-label" style="color:#444">label</span>` +
+        `<span class="part-skip">${isPending ? 'draw or skip…' : 'skipped'}</span>`;
+    }
+    card.appendChild(lrow);
+
+    list.appendChild(card);
   });
 }
 
-function deleteBox(i) {
-  boxes.splice(i, 1);
-  if (selectedBox >= boxes.length) selectedBox = -1;
+function deletePair(i) {
+  const wasPending = annotMode === 'label' && i === pairs.length - 1;
+  pairs.splice(i, 1);
+  if (selectedPair >= pairs.length) { selectedPair = -1; selectedPart = null; }
   dirty = true;
-  redraw(); renderBoxList();
-  setStatus(`Deleted box ${i}. ${boxes.length} remaining.`, 'warn');
+  if (wasPending) enterStructMode();   // cancel pending state
+  redraw(); renderPairList();
+  setStatus(`Deleted pair ${i}. ${pairs.length} remaining.`, 'warn');
 }
 
-// ── Save ──────────────────────────────────────────────────────────────────────
-document.getElementById('save-btn').addEventListener('click', saveCurrent);
+function clearLabel(i) {
+  pairs[i].label_bbox = null;
+  dirty = true;
+  redraw(); renderPairList();
+  setStatus(`Label cleared for pair #${i}.`, 'warn');
+}
+
+// ─── Save & export ────────────────────────────────────────────────────────────
+document.getElementById('save-btn').addEventListener('click', () => saveCurrent());
 
 document.getElementById('empty-btn').addEventListener('click', async () => {
-  // "No panels on this page" — clears boxes and saves [] explicitly
-  if (boxes.length && !confirm('Clear all boxes and mark page as "no panels"?')) return;
-  boxes = [];
-  dirty = true;
-  redraw(); renderBoxList();
-  await saveCurrent();
+  if (pairs.length && !confirm('Clear all pairs and mark page as "no panels"?')) return;
+  pairs = []; dirty = true;
+  enterStructMode();
+  renderPairList(); redraw();
+  await saveCurrent({ advance: false });
   setStatus('Page marked as "no panels".', 'ok');
-  sidebarBadge.innerHTML = '<span class="badge-empty">∅ empty</span>';
+  updateSidebarBadge(true, 0);
 });
 
-document.getElementById('undo-btn').addEventListener('click', () => {
-  if (boxes.length) deleteBox(boxes.length - 1);
-});
+document.getElementById('undo-btn').addEventListener('click', undoLast);
 
 document.getElementById('clear-btn').addEventListener('click', () => {
-  if (!confirm(`Delete all ${boxes.length} boxes on this page?`)) return;
-  boxes = []; dirty = true; redraw(); renderBoxList();
+  if (!confirm(`Delete all ${pairs.length} pair(s) on this page?`)) return;
+  pairs = []; selectedPair = -1; selectedPart = null; dirty = true;
+  enterStructMode(); redraw(); renderPairList();
   setStatus('Cleared. Press S to save.', 'warn');
 });
 
-async function saveCurrent() {
+function undoLast() {
+  if (!pairs.length) return;
+  const last = pairs[pairs.length - 1];
+  if (annotMode === 'label') {
+    // We're mid-pair: remove the incomplete struct
+    pairs.pop();
+    enterStructMode();
+    setStatus('Removed pending structure.', 'warn');
+  } else if (last.label_bbox) {
+    // Clear the label first
+    last.label_bbox = null;
+    setStatus('Cleared last label box.', 'warn');
+  } else {
+    // Remove the whole pair
+    pairs.pop();
+    setStatus(`Removed pair #${pairs.length}.`, 'warn');
+  }
+  selectedPair = -1; selectedPart = null;
+  dirty = true; redraw(); renderPairList();
+}
+
+async function saveCurrent({ advance = true } = {}) {
   if (!pages.length) return;
   const p = pages[pageIdx];
   const r = await fetch(`/annotations/${p.id}`, {
     method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({boxes}),
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ pairs }),
   });
   const data = await r.json();
   dirty = false;
   pages[pageIdx].annotated = true;
-  pages[pageIdx].n_boxes   = data.saved;
-  updateProgress();
-  setStatus(`Saved ${data.saved} box(es).`, 'ok');
-  if (data.saved === 0) {
-    sidebarBadge.innerHTML = '<span class="badge-empty">∅ empty</span>';
-  } else {
-    sidebarBadge.innerHTML = `<span class="badge-done">${data.saved} box(es)</span>`;
-  }
+  pages[pageIdx].n_pairs   = data.saved;
+  updateProgress(); updateThumbBadges();
+  updateSidebarBadge(true, data.saved);
+  setStatus(`Saved ${data.saved} pair(s).`, 'ok');
+  if (advance && autoAdvance && pageIdx < pages.length - 1) await navigate(1);
 }
 
-// ── Progress bar ──────────────────────────────────────────────────────────────
+// ─── Progress ─────────────────────────────────────────────────────────────────
 function updateProgress() {
-  if (!pages.length) { progress.textContent = ''; return; }
+  if (!pages.length) { progressEl.textContent = ''; return; }
   const done = pages.filter(p => p.annotated).length;
-  progress.textContent = `${done}/${pages.length} annotated`;
-  progress.style.color = done === pages.length ? '#9f9' : '#888';
+  progressEl.textContent = `${done}/${pages.length} annotated`;
+  progressEl.style.color = done === pages.length ? '#8e8' : '#555';
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// ─── Export ───────────────────────────────────────────────────────────────────
 document.getElementById('export-btn').addEventListener('click', async () => {
   const annotated = pages.filter(p => p.annotated).length;
   const pending   = pages.filter(p => !p.annotated).length;
-  const msg = `Export ${annotated} annotated page(s) to images/?` +
+  if (!confirm(`Export ${annotated} annotated page(s) to images/?` +
     (pending ? `\n\n${pending} unannotated page(s) will be discarded.` : '') +
-    '\n\nTmp images will be deleted and the session will reset.';
-  if (!confirm(msg)) return;
+    '\n\nSession will reset.')) return;
 
-  if (dirty) await saveCurrent();
+  if (dirty) await saveCurrent({ advance: false });
   setStatus('Exporting…', 'info');
-
-  const r    = await fetch('/export', {method: 'POST'});
+  const r    = await fetch('/export', { method: 'POST' });
   const data = await r.json();
 
-  // Reset UI
-  pages = []; pageIdx = 0; boxes = []; dirty = false;
-  document.getElementById('welcome').style.display = 'block';
-  document.getElementById('canvas-container').style.display = 'none';
-  pageInfo.textContent   = 'No pages';
-  progress.textContent   = '';
-  sidebarTitle.textContent = 'Boxes';
-  sidebarBadge.textContent = '';
-  document.getElementById('box-list').innerHTML = '';
+  pairs = []; pageIdx = 0; dirty = false;
+  welcome.style.display    = 'block';
+  canvasCont.style.display = 'none';
+  thumbList.innerHTML      = '';
+  document.getElementById('thumb-header').textContent = 'PAGES';
+  pageInfo.textContent     = 'No pages';
+  progressEl.textContent   = '';
+  document.getElementById('sidebar-title').textContent = 'Pairs';
+  sideBadge.textContent    = '';
+  document.getElementById('pair-list').innerHTML = '';
+  enterStructMode();
   enableNav(false);
-
-  setStatus(
-    `Done — ${data.exported} page(s) saved to images/, ${data.skipped} discarded.`,
-    'ok'
-  );
+  setStatus(`Done — ${data.exported} page(s) saved, ${data.skipped} discarded.`, 'ok');
 });
 
-function enableNav(on) {
-  ['prev-btn','next-btn','save-btn','empty-btn','undo-btn','clear-btn','export-btn']
-    .forEach(id => document.getElementById(id).disabled = !on);
-}
+// ─── Auto-advance ─────────────────────────────────────────────────────────────
+document.getElementById('auto-adv-chk').addEventListener('change', e => {
+  autoAdvance = e.target.checked;
+});
 
-function setStatus(msg, level = 'ok') {
-  status.textContent = msg;
-  status.style.color = {ok:'#9f9', warn:'#fa0', err:'#f66', info:'#88f'}[level] ?? '#ddd';
-}
-
-// ── Keyboard shortcuts ────────────────────────────────────────────────────────
-// 1/2 class toggle handled by the class toggle section above
+// ─── Keyboard ─────────────────────────────────────────────────────────────────
 document.addEventListener('keydown', async e => {
   if (e.target.tagName === 'INPUT') return;
-  if (e.key === 's' || e.key === 'S') { await saveCurrent(); }
-  if (e.key === 'e' || e.key === 'E') { document.getElementById('empty-btn').click(); }
-  if (e.key === 'z' || e.key === 'Z') { if (boxes.length) deleteBox(boxes.length - 1); }
-  if (e.key === 'ArrowRight') { await navigate(1); }
-  if (e.key === 'ArrowLeft')  { await navigate(-1); }
+
+  if (e.code === 'Space') {
+    e.preventDefault(); spaceDown = true;
+    if (dragState.mode !== 'panning') updateCursor(hoverHit); return;
+  }
+  if (e.key === 's' || e.key === 'S') { await saveCurrent(); return; }
+  if (e.key === 'e' || e.key === 'E') { document.getElementById('empty-btn').click(); return; }
+  if (e.key === 'k' || e.key === 'K') { skipLabel(); return; }
+  if (e.key === 'z' || e.key === 'Z') { undoLast(); return; }
+  if (e.key === 'Delete' || e.key === 'Backspace') {
+    if (selectedPair >= 0) {
+      if (selectedPart === 'label') clearLabel(selectedPair);
+      else deletePair(selectedPair);
+    }
+    return;
+  }
+  if (e.key === 'Escape') {
+    selectedPair = -1; selectedPart = null;
+    dragState = { mode: null }; hoverHit = { type: null };
+    updateCursor(hoverHit); redraw(); renderPairList(); return;
+  }
+  if (e.key === 'ArrowRight') { await navigate(1);  return; }
+  if (e.key === 'ArrowLeft')  { await navigate(-1); return; }
+  if (e.key === '=' || e.key === '+') { doZoom(1.3,   null); return; }
+  if (e.key === '-' || e.key === '_') { doZoom(1/1.3, null); return; }
+});
+
+document.addEventListener('keyup', e => {
+  if (e.code === 'Space') {
+    spaceDown = false;
+    if (dragState.mode === 'panning') dragState = { mode: null };
+    updateCursor(hoverHit);
+  }
 });
 </script>
 </body>
