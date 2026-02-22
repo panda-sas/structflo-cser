@@ -13,8 +13,11 @@ python scripts/publish_weights.py --model cser-detector --version v1.0
 python scripts/publish_weights.py --model cser-detector --version v1.0 \\
     --weights-file runs/labels_detect/yolo11l_panels/weights/best.pt
 
+# Publish LPS (Learned Pair Scorer) weights
+python scripts/publish_weights.py --model cser-lps --version v1.0
+
 # Pin to a specific package version range (default: current major, e.g. >=0.1.0,<1.0.0)
-python scripts/publish_weights.py --model cser-detector --version v1.0 \\
+python scripts/publish_weights.py --model cser-lps --version v1.0 \\
     --requires ">=0.1.0,<1.0.0"
 """
 
@@ -36,11 +39,16 @@ MODEL_REPOS: dict[str, dict] = {
         "repo_id":  "sidxz/structflo-cser-detector",
         "filename": "best.pt",
     },
+    "cser-lps": {
+        "repo_id":  "sidxz/structflo-cser-lps",
+        "filename": "best.pt",
+    },
 }
 
 # Default weights file paths per model (relative to project root)
 DEFAULT_WEIGHTS_PATHS: dict[str, str] = {
     "cser-detector": "runs/labels_detect/yolo11l_panels/weights/best.pt",
+    "cser-lps":      "runs/lps/best.pt",
 }
 
 PROJECT_ROOT = Path(__file__).parent.parent
