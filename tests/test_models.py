@@ -74,6 +74,7 @@ class TestCompoundPair:
             "label_bbox",
             "label_conf",
             "match_distance",
+            "match_confidence",
             "smiles",
             "label_text",
         }
