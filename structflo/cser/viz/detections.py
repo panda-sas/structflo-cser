@@ -96,7 +96,10 @@ def _draw_pair_line(ax: plt.Axes, pair: CompoundPair, index: int) -> None:
     ax.plot([sc[0], lc[0]], [sc[1], lc[1]], color=PAIR_COLOR, linewidth=2)
     mid_x = (sc[0] + lc[0]) / 2
     mid_y = (sc[1] + lc[1]) / 2
-    ax.text(mid_x + 5, mid_y, str(index), color=PAIR_COLOR, fontsize=12, weight="bold")
+    label = f"#{index}"
+    if pair.match_confidence is not None:
+        label += f" {pair.match_confidence:.2f}"
+    ax.text(mid_x + 5, mid_y, label, color=PAIR_COLOR, fontsize=10, weight="bold")
 
 
 # ── public API ──────────────────────────────────────────────────────────────
@@ -227,8 +230,11 @@ def plot_crops(
         sb = pair.structure.bbox
         struct_crop = pil.crop((int(sb.x1), int(sb.y1), int(sb.x2), int(sb.y2)))
         axes[i, 0].imshow(struct_crop)
+        match_str = (
+            f", match={pair.match_confidence:.2f}" if pair.match_confidence is not None else ""
+        )
         axes[i, 0].set_title(
-            f"Pair {i} — Structure (conf={pair.structure.conf:.2f})", fontsize=10
+            f"Pair {i} — Structure (det={pair.structure.conf:.2f}{match_str})", fontsize=10
         )
         axes[i, 0].axis("off")
 
@@ -237,7 +243,7 @@ def plot_crops(
         label_crop = pil.crop((int(lb.x1), int(lb.y1), int(lb.x2), int(lb.y2)))
         axes[i, 1].imshow(label_crop)
         axes[i, 1].set_title(
-            f"Pair {i} — Label (conf={pair.label.conf:.2f})", fontsize=10
+            f"Pair {i} — Label (det={pair.label.conf:.2f})", fontsize=10
         )
         axes[i, 1].axis("off")
 
@@ -294,7 +300,10 @@ def plot_results(
         if len(smiles) > max_smiles_len:
             smiles = smiles[:max_smiles_len] + "…"
         label_txt = pair.label_text or "—"
-        annotation = f"#{i}  {label_txt}\n{smiles}"
+        conf_str = (
+            f"  conf={pair.match_confidence:.2f}" if pair.match_confidence is not None else ""
+        )
+        annotation = f"#{i}  {label_txt}{conf_str}\n{smiles}"
         sb = pair.structure.bbox
         ax.text(
             sb.x1,

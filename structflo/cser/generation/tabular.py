@@ -1,5 +1,6 @@
 """Tabular page generators: Excel-like tables and compound grid sheets."""
 
+import dataclasses
 import random
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Tuple
@@ -168,6 +169,18 @@ def make_excel_page(
     s_hi = max(s_lo + 45, int(cfg.struct_size_range[1] * 0.825))
     struct_size = random.randint(s_lo, s_hi)
 
+    # Cap atom-label fonts to ~10 % of the render canvas so that large font
+    # draws don't crowd atoms into a visually compressed knot when struct_size
+    # is small (common in dense Excel-style tables at lower DPI).
+    _max_atom = max(7, int(struct_size * 0.10))
+    struct_cfg = dataclasses.replace(
+        cfg,
+        atom_font_range=(
+            min(cfg.atom_font_range[0], _max_atom),
+            min(cfg.atom_font_range[1], _max_atom),
+        ),
+    )
+
     cell_pad = max(6, int(10 * scale))
     row_h = struct_size + 2 * cell_pad
     header_h = max(22, int(32 * scale))
@@ -240,7 +253,7 @@ def make_excel_page(
         if y + row_h > table_y1:
             break
 
-        struct_img = render_structure(smi, struct_size, cfg)
+        struct_img = render_structure(smi, struct_size, struct_cfg)
         if struct_img is None:
             continue
 
@@ -349,6 +362,16 @@ def make_grid_page(
     struct_size = int(cell_w * random.uniform(0.55, 0.72))
     struct_size = max(int(55 * scale), struct_size)
 
+    # Cap atom fonts relative to the render canvas (same rationale as make_excel_page).
+    _max_atom = max(7, int(struct_size * 0.10))
+    struct_cfg = dataclasses.replace(
+        cfg,
+        atom_font_range=(
+            min(cfg.atom_font_range[0], _max_atom),
+            min(cfg.atom_font_range[1], _max_atom),
+        ),
+    )
+
     label_above = random.random() < 0.5
 
     # Optional extra data rows beneath the label
@@ -392,7 +415,7 @@ def make_grid_page(
             if smi is None:
                 break
 
-            struct_img = render_structure(smi, struct_size, cfg)
+            struct_img = render_structure(smi, struct_size, struct_cfg)
             if struct_img is None:
                 continue
 
@@ -410,9 +433,11 @@ def make_grid_page(
             page.paste(struct_img, (sx, sy), struct_img)
             struct_box = (sx, sy, sx + sw, sy + sh)
 
-            # Label
+            # Label — add horizontal jitter so dx_norm is not always ≈0
+            # (structures are centred in the cell, labels were too; jitter breaks that).
             label = random_label()
-            label_cx = cell_x + cell_w // 2
+            _jitter_x = random.randint(-sw // 4, sw // 4)
+            label_cx = cell_x + cell_w // 2 + _jitter_x
             if label_above:
                 label_cy = cell_y + struct_pad + label_h // 2
             else:

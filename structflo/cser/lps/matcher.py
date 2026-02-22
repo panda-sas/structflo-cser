@@ -186,6 +186,7 @@ class LearnedMatcher(BaseMatcher):
                         structure=structures[r],
                         label=labels[c],
                         match_distance=float(1.0 - score),
+                        match_confidence=score,
                     )
                 )
         return pairs
