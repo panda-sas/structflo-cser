@@ -5,13 +5,25 @@ from io import BytesIO
 from typing import List, Optional, Tuple
 
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageDraw
 from rdkit import Chem
 from rdkit.Chem import AllChem
 from rdkit.Chem.Draw import rdMolDraw2D
 
 from structflo.cser._geometry import boxes_intersect
 from structflo.cser.config import PageConfig
+
+
+def _to_dark_mode(img: Image.Image) -> Image.Image:
+    """Invert a transparent-background structure image for dark-background compositing.
+
+    Black/coloured bonds and atom labels become white/light so they remain visible
+    when pasted over a dark page region (slides, highlighted compound boxes).
+    """
+    arr = np.array(img).copy()
+    visible = arr[:, :, 3] > 0
+    arr[visible, :3] = 255 - arr[visible, :3]
+    return Image.fromarray(arr, mode="RGBA")
 
 
 def render_structure(smiles: str, size: int, cfg: PageConfig) -> Optional[Image.Image]:
@@ -34,13 +46,37 @@ def render_structure(smiles: str, size: int, cfg: PageConfig) -> Optional[Image.
     opts = drawer.drawOptions()
     opts.bondLineWidth = random.uniform(*cfg.bond_width_range)
     opts.minFontSize = random.randint(*cfg.atom_font_range)
-    opts.maxFontSize = opts.minFontSize + 8
+    opts.maxFontSize = opts.minFontSize + random.randint(4, 14)
     opts.additionalAtomLabelPadding = random.uniform(0.05, 0.2)
     opts.rotate = random.uniform(0, 360)
-    if random.random() < 0.3:
+    use_bw = random.random() < 0.3
+    if use_bw:
         opts.useBWAtomPalette()
 
-    drawer.DrawMolecule(mol)
+    # Coloured atom highlights: ~20% of structures (common in SAR / MMP papers
+    # to mark R-group attachment points or pharmacophore features).
+    highlight_atoms: list[int] = []
+    highlight_colors: dict = {}
+    if not use_bw and random.random() < 0.20:
+        n_atoms = mol.GetNumAtoms()
+        if n_atoms > 1:
+            palette = [
+                (0.8, 0.1, 0.1),   # red   — e.g. reactive sites
+                (0.1, 0.1, 0.85),  # blue  — e.g. basic centres
+                (0.0, 0.55, 0.0),  # green — e.g. chiral centres
+                (0.7, 0.4, 0.0),   # orange
+            ]
+            n_hl = random.randint(1, min(3, n_atoms - 1))
+            chosen = random.sample(range(n_atoms), n_hl)
+            color = random.choice(palette)
+            highlight_atoms = chosen
+            highlight_colors = {idx: color for idx in chosen}
+
+    if highlight_atoms:
+        drawer.DrawMolecule(mol, highlightAtoms=highlight_atoms,
+                            highlightAtomColors=highlight_colors)
+    else:
+        drawer.DrawMolecule(mol)
     drawer.FinishDrawing()
 
     img = Image.open(BytesIO(drawer.GetDrawingText())).convert("RGBA")
@@ -69,12 +105,18 @@ def place_structure(
     max_tries: int = 80,
     x_range: Optional[Tuple[int, int]] = None,
     y_range: Optional[Tuple[int, int]] = None,
+    dark_bg: Optional[Tuple[int, int, int]] = None,
 ) -> Optional[Tuple[int, int, int, int]]:
     """Try to paste *struct_img* onto *page* without overlapping existing boxes.
 
     Randomly samples positions within the allowed region (x_range/y_range or
     page margins) up to *max_tries* times. Returns the (x0,y0,x1,y1) box on
     success, or None if no free position was found.
+
+    Args:
+        dark_bg: If given, fill a solid rectangle of this RGB colour behind the
+                 structure before compositing. Use with ``_to_dark_mode()`` on
+                 *struct_img* so the bonds appear light on the dark patch.
     """
     w, h = page.size
     sw, sh = struct_img.size
@@ -96,6 +138,9 @@ def place_structure(
         if any(boxes_intersect(padded, b) for b in existing_boxes):
             continue
 
+        if dark_bg is not None:
+            draw = ImageDraw.Draw(page)
+            draw.rectangle([x, y, x + sw, y + sh], fill=dark_bg)
         page.paste(struct_img, (x, y), struct_img)
         return box
     return None

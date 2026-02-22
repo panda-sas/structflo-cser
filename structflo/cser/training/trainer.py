@@ -81,7 +81,7 @@ def main() -> None:
         default=8,
         help="Batch size (8 is safe for A6000 48GB at imgsz=1280)",
     )
-    p.add_argument("--epochs", type=int, default=50)
+    p.add_argument("--epochs", type=int, default=30)
     p.add_argument(
         "--resume", default=None, help="Path to last.pt to resume an interrupted run"
     )

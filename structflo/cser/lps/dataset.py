@@ -23,7 +23,9 @@ from typing import Literal
 
 import cv2
 import numpy as np
+import scipy.ndimage as ndi
 import torch
+from io import BytesIO
 from PIL import Image
 from torch import Tensor
 from torch.utils.data import Dataset, Sampler
@@ -50,32 +52,86 @@ def _augment_crop(
     p_flip: float = 0.5,
     brightness_range: float = 0.25,
 ) -> np.ndarray:
-    """Random rotation + flip + brightness jitter on a (1, H, W) float32 crop.
+    """Domain-robust augmentation on a (1, H, W) float32 crop.
 
-    Args:
-        crop:             Input crop, shape (1, H, W), float32 in [0, 1].
-        rng:              NumPy Generator — caller provides for reproducibility.
-        max_rot:          Maximum rotation angle in degrees (symmetric ± range).
-                          Use ~180° for structures (rotationally symmetric),
-                          ~45° for labels (text is semi-upright in real docs).
-        p_flip:           Probability of horizontal flip.
-        brightness_range: Scalar multiplier sampled from
-                          [1 - range, 1 + range].
+    Designed to bridge the gap between synthetic RDKit renders and real-world
+    document crops (ChemDraw, MarvinSketch, scanned PDFs, screenshots).
+
+    Transforms applied independently with their own probabilities:
+    - Rotation ± max_rot degrees  (spatial invariance)
+    - Horizontal flip             (spatial invariance)
+    - Brightness jitter           (multiplicative; scanner exposure variation)
+    - Contrast jitter             (histogram stretch; render engine differences)
+    - Gaussian blur               (lower DPI / out-of-focus scans)
+    - Morphological erosion/dilation (line-width differences across renderers)
+    - Gaussian noise              (scanner grain)
+    - JPEG recompression          (PDF-internal lossy compression artefacts)
+    - Random inversion            (dark-background slides / highlighted regions)
     """
     img = Image.fromarray((crop[0] * 255).astype(np.uint8), mode="L")
 
+    # --- Spatial transforms ---
     angle = float(rng.uniform(-max_rot, max_rot))
     img = img.rotate(angle, resample=Image.Resampling.BILINEAR, expand=False, fillcolor=255)
 
     if rng.random() < p_flip:
         img = img.transpose(Image.Transpose.FLIP_LEFT_RIGHT)
 
-    arr = np.array(img, dtype=np.float32) / 255.0
-    if brightness_range > 0:
+    arr = np.array(img, dtype=np.float32) / 255.0  # (H, W)
+
+    # --- Intensity transforms ---
+    # Brightness jitter: multiplicative shift of all pixels
+    if brightness_range > 0 and rng.random() < 0.70:
         arr = np.clip(
             arr * float(rng.uniform(1 - brightness_range, 1 + brightness_range)),
             0.0, 1.0,
         )
+
+    # Contrast jitter: stretch / compress histogram around mid-grey.
+    # Models the wide variation between high-contrast vector PDFs and flat scans.
+    if rng.random() < 0.60:
+        c = float(rng.uniform(0.70, 1.45))
+        arr = np.clip((arr - 0.5) * c + 0.5, 0.0, 1.0)
+
+    # Gaussian blur: simulates lower DPI rendering or slight scan defocus
+    if rng.random() < 0.25:
+        arr = ndi.gaussian_filter(arr, sigma=float(rng.uniform(0.3, 1.2)))
+
+    # --- Structural / renderer-difference transforms ---
+    # Morphological erosion → thinner lines (ChemDraw thin-export, vector PDF)
+    # Morphological dilation → thicker lines (bold print, scanned copies)
+    # This is the primary fix for the visual domain gap between renderers.
+    if rng.random() < 0.35:
+        foreground = arr < 0.5  # True = dark ink pixel
+        iterations = int(rng.integers(1, 3))  # 1 or 2 px
+        if rng.random() < 0.5:
+            processed = ndi.binary_erosion(foreground, iterations=iterations)
+        else:
+            processed = ndi.binary_dilation(foreground, iterations=iterations)
+        arr = np.where(processed, 0.0, 1.0).astype(np.float32)
+
+    # --- Noise / compression artefacts ---
+    # Gaussian noise: scanner grain, compressed image quantisation
+    if rng.random() < 0.20:
+        arr = np.clip(
+            arr + rng.normal(0, float(rng.uniform(0.01, 0.04)), arr.shape).astype(np.float32),
+            0.0, 1.0,
+        )
+
+    # JPEG recompression: many PDFs store pages as internal JPEG streams;
+    # the resulting block artefacts are a common domain shift for real crops.
+    if rng.random() < 0.25:
+        quality = int(rng.integers(35, 86))
+        tmp = Image.fromarray((arr * 255).astype(np.uint8), mode="L")
+        buf = BytesIO()
+        tmp.save(buf, format="JPEG", quality=quality)
+        buf.seek(0)
+        arr = np.array(Image.open(buf), dtype=np.float32) / 255.0
+
+    # Random inversion: dark-background slides, highlighted compound boxes
+    if rng.random() < 0.08:
+        arr = 1.0 - arr
+
     return arr[np.newaxis]  # (1, H, W)
 
 

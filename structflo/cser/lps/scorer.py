@@ -151,7 +151,7 @@ class PairScorer(nn.Module):
         geom projection  :  64-d
         concatenated     : 320-d → head → 1
 
-    Parameter count: ~1.16 M
+    Parameter count: ~557 K
     """
 
     STRUCT_FEAT = 128
