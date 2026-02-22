@@ -66,9 +66,10 @@ class ChemPipeline:
         matcher: BaseMatcher | None = None,
         smiles_extractor: BaseSmilesExtractor | None = None,
         ocr: BaseOCR | None = None,
-        tile: bool = True,
+        tile: bool = False,
         tile_size: int = 1536,
         conf: float = 0.3,
+        grayscale: bool = True,
     ) -> None:
         """
         Args:
@@ -81,6 +82,8 @@ class ChemPipeline:
             tile:             Use sliding-window tiling during detection.
             tile_size:        Tile side length in pixels.
             conf:             YOLO confidence threshold.
+            grayscale:        Convert input images to grayscale before detection.
+                              Defaults to True to match training data distribution.
         """
         self._weights = weights  # version tag, local path str/Path, or None
         self._matcher = matcher or HungarianMatcher()
@@ -89,6 +92,7 @@ class ChemPipeline:
         self.tile = tile
         self.tile_size = tile_size
         self.conf = conf
+        self.grayscale = grayscale
         self._model = None  # ultralytics YOLO — lazy-loaded on first detect() call
 
     # ------------------------------------------------------------------
@@ -118,6 +122,8 @@ class ChemPipeline:
         """
         self._load_model()
         img_pil = _to_pil(image)
+        if self.grayscale:
+            img_pil = img_pil.convert("L").convert("RGB")
         img_np = np.array(img_pil)
         if self.tile:
             raw = detect_tiled(

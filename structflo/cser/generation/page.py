@@ -23,18 +23,77 @@ from structflo.cser.distractors import (
     add_section_header,
     add_stray_text,
 )
-from structflo.cser.rendering.chemistry import place_structure, render_structure
+from structflo.cser.rendering.chemistry import (
+    _to_dark_mode,
+    place_structure,
+    render_structure,
+)
 from structflo.cser.rendering.text import add_label_near_structure
 
 
+def _page_bg_color(cfg: PageConfig) -> Tuple[int, int, int]:
+    """Return a background colour for the page canvas.
+
+    Pure white (72%) / cream aged-paper (8%) / light-grey (4%) — remaining
+    probability is pure white again so it stays the dominant case.
+    """
+    roll = random.random()
+    if roll < cfg.page_bg_tint_prob * 0.67:
+        # Cream / aged paper (common in scanned journal pages and patents)
+        return (
+            random.randint(248, 254),
+            random.randint(240, 250),
+            random.randint(218, 238),
+        )
+    if roll < cfg.page_bg_tint_prob:
+        # Very light grey (common in LaTeX-generated PDFs viewed on screen)
+        v = random.randint(238, 250)
+        return (v, v, v)
+    return (255, 255, 255)
+
+
 def apply_noise(img: Image.Image, cfg: PageConfig) -> Image.Image:
-    """Apply random brightness jitter, blur, and Gaussian noise to a page."""
+    """Apply random photometric degradations to a page image.
+
+    Models real-world document imperfections:
+    - Brightness jitter      — scanner exposure / print darkness variation
+    - Contrast jitter        — gamma / tone-curve differences across devices
+    - Scanner lamp gradient  — non-uniform illumination across the scan bed
+    - Gaussian blur          — flatbed scanner softness / slight defocus
+    - Gaussian noise         — scanner CCD noise
+    """
     out = img
 
+    # Brightness: multiplicative exposure shift
     if random.random() < cfg.brightness_prob:
-        factor = random.uniform(0.85, 1.15)
+        factor = random.uniform(0.80, 1.20)
         arr = np.array(out).astype(np.float32)
         arr = np.clip(arr * factor, 0, 255).astype(np.uint8)
+        out = Image.fromarray(arr)
+
+    # Contrast: stretch / compress around mid-grey (gamma-like)
+    if random.random() < 0.30:
+        arr = np.array(out).astype(np.float32)
+        c = random.uniform(0.80, 1.25)
+        arr = np.clip((arr - 128.0) * c + 128.0, 0, 255).astype(np.uint8)
+        out = Image.fromarray(arr)
+
+    # Scanner lamp falloff: a smooth brightness gradient across the page,
+    # brighter on one side — common in flatbed scans of bound documents.
+    if random.random() < 0.10:
+        arr = np.array(out).astype(np.float32)
+        h, w = arr.shape[:2]
+        strength = random.uniform(0.04, 0.10)
+        side = random.choice(["left", "right", "top", "bottom"])
+        if side == "left":
+            grad = np.linspace(1 - strength, 1 + strength, w)[np.newaxis, :, np.newaxis]
+        elif side == "right":
+            grad = np.linspace(1 + strength, 1 - strength, w)[np.newaxis, :, np.newaxis]
+        elif side == "top":
+            grad = np.linspace(1 - strength, 1 + strength, h)[:, np.newaxis, np.newaxis]
+        else:
+            grad = np.linspace(1 + strength, 1 - strength, h)[:, np.newaxis, np.newaxis]
+        arr = np.clip(arr * grad, 0, 255).astype(np.uint8)
         out = Image.fromarray(arr)
 
     if random.random() < cfg.blur_prob:
@@ -59,7 +118,7 @@ def make_negative_page(
     Used as hard negatives so the model learns to output nothing when
     there are no structures present.
     """
-    page = Image.new("RGB", (cfg.page_w, cfg.page_h), (255, 255, 255))
+    page = Image.new("RGB", (cfg.page_w, cfg.page_h), _page_bg_color(cfg))
     existing_boxes: List[Tuple[int, int, int, int]] = []
 
     for _ in range(random.randint(3, 6)):
@@ -107,7 +166,7 @@ def make_page(
     Returns (page_image, panels) where each panel dict has:
       struct_box, label_box, label_text, smiles.
     """
-    page = Image.new("RGB", (cfg.page_w, cfg.page_h), (255, 255, 255))
+    page = Image.new("RGB", (cfg.page_w, cfg.page_h), _page_bg_color(cfg))
 
     existing_boxes: List[Tuple[int, int, int, int]] = []
     panels: List[dict] = []
@@ -157,12 +216,30 @@ def make_page(
         col_y_range = None
         grid_positions = None
 
+    _DARK_BG_COLORS = [
+        (15, 15, 15),
+        (30, 30, 30),
+        (20, 20, 55),
+        (35, 10, 10),
+        (10, 35, 10),
+        (40, 30, 0),
+    ]
+
     grid_idx = 0
     for smi in smiles_pool[: n_structures * 2]:
         size = random.randint(*cfg.struct_size_range)
         struct_img = render_structure(smi, size, cfg)
         if struct_img is None:
             continue
+
+        # Dark-background variant: ~15% of structures rendered on a dark patch.
+        # Models highlighted compound boxes in slides and coloured-background PDFs.
+        # Bonds are inverted to remain visible; the page gets a filled dark rect.
+        if random.random() < cfg.dark_bg_prob:
+            struct_img = _to_dark_mode(struct_img)
+            dark_color: Optional[Tuple[int, int, int]] = random.choice(_DARK_BG_COLORS)
+        else:
+            dark_color = None
 
         if use_grid and grid_positions and grid_idx < len(grid_positions):
             gx0, gy0, gx1, gy1 = grid_positions[grid_idx]
@@ -173,6 +250,7 @@ def make_page(
                 existing_boxes,
                 x_range=(gx0, gx1),
                 y_range=(gy0, gy1),
+                dark_bg=dark_color,
             )
             grid_idx += 1
         elif two_column:
@@ -185,9 +263,12 @@ def make_page(
                 existing_boxes,
                 x_range=col_x_ranges[col],
                 y_range=col_y_range,
+                dark_bg=dark_color,
             )
         else:
-            box = place_structure(page, struct_img, cfg, existing_boxes)
+            box = place_structure(
+                page, struct_img, cfg, existing_boxes, dark_bg=dark_color
+            )
 
         if box is None:
             continue

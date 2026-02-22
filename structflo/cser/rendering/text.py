@@ -20,11 +20,25 @@ def _rand_prefix(min_len: int = 3, max_len: int = 6) -> str:
 LABEL_STYLES = {
     # CHEMBL2000, ZINC123456 — well-known DB prefix + 4-7 digits
     "chembl_like": lambda: (
-        random.choice(["CHEMBL", "PUBCHEM", "ZINC", "MCULE", "ENAMINE"])
+        random.choice(
+            [
+                "CHEMBL",
+                "PUBCHEM",
+                "ZINC",
+                "MCULE",
+                "ENAMINE",
+                "COCONUT",
+                "STDINCHI",
+                "DRUGBANK",
+                "HMDB",
+                "TBDA",
+                "SACC",
+            ]
+        )
         + str(random.randint(100, 9_999_999))
     ),
-    # SACC-33000, MERK-5512 — 3-5 uppercase letters + dash + digits
-    "dash_long": lambda: _rand_prefix(3, 5) + "-" + str(random.randint(100, 999_999)),
+    # SACC-33000, MERK-5512, LGENINA-90000 — 3-8 uppercase letters + dash + digits
+    "dash_long": lambda: _rand_prefix(3, 8) + "-" + str(random.randint(100, 9_999_999)),
     # LGNIA55, BXTR2204 — 4-6 uppercase letters directly followed by digits (no dash)
     "prefix_nodash": lambda: _rand_prefix(4, 6) + str(random.randint(10, 99999)),
     # MERK-22.4.5.6 — prefix + dash + dotted hierarchical number
@@ -43,6 +57,39 @@ LABEL_STYLES = {
         + "-"
         + str(random.randint(1, 99999)).zfill(5)
     ),
+    # Simple integer: "1", "2", "42" — extremely common in journal figures
+    # "simple_number": lambda: str(random.randint(1, 50)),
+    # Alphanumeric series: "1a", "2b", "3c" — SAR / MMP / congeneric series
+    # "alpha_number": lambda: str(random.randint(1, 30)) + random.choice("abcdefghij"),
+    # Parenthesised: "(1)", "(2a)", "(15b)" — total synthesis, heterocycle papers
+    # "parenthesized": lambda: (
+    #     "(" + str(random.randint(1, 30))
+    #     + random.choice(["", "a", "b", "c", "d", "e"])
+    #     + ")"
+    # ),
+    # "compound-1", "Structure 5", "cpd-23" — very common in supplementary info
+    "compound_style": lambda: (
+        random.choice(
+            [
+                "compound",
+                "Compound",
+                "structure",
+                "Structure",
+                "cpd",
+                "Cpd",
+                "mol",
+                "Mol",
+                "cmpd",
+            ]
+        )
+        + random.choice(["-", " "])
+        + str(random.randint(1, 1000))
+    ),
+    # Roman numerals: I, II, III … — total synthesis & named-compound papers
+    # "roman": lambda: random.choice(
+    #     ["I", "II", "III", "IV", "V", "VI", "VII", "VIII",
+    #      "IX", "X", "XI", "XII", "XIII", "XIV", "XV"]
+    # ),
 }
 
 
@@ -206,36 +253,54 @@ def add_label_near_structure(
     font = load_font(font_paths, font_size, prefer_bold=use_bold)
 
     x0, y0, x1, y1 = struct_box
+    struct_w = x1 - x0
+    struct_h = y1 - y0
 
     draw = ImageDraw.Draw(page)
     text_bbox = draw.textbbox((0, 0), label, font=font)
     text_w = text_bbox[2] - text_bbox[0]
     text_h = text_bbox[3] - text_bbox[1]
 
+    # Diagonal placements (bottom_right, bottom_left) break the 4-cluster
+    # pattern where dx_norm≈0 or dy_norm≈0 for all cardinal directions.
     placement = random.choices(
-        ["below", "above", "left", "right"],
-        weights=[50, 20, 15, 15],
+        ["below", "above", "left", "right", "bottom_right", "bottom_left"],
+        weights=[32, 17, 14, 14, 12, 11],
     )[0]
     offset = random.randint(*cfg.label_offset_range)
 
-    struct_cx = x0 + (x1 - x0) // 2
-    struct_cy = y0 + (y1 - y0) // 2
+    struct_cx = x0 + struct_w // 2
+    struct_cy = y0 + struct_h // 2
+
+    # Lateral jitter (±1/3 of perpendicular struct dimension) so the
+    # geometric features dx_norm / dy_norm are not always near 0 on the
+    # dominant axis — this forces the model to use visual features too.
+    lat_x = random.randint(-struct_w // 3, struct_w // 3)
+    lat_y = random.randint(-struct_h // 3, struct_h // 3)
 
     if placement == "below":
-        cx = struct_cx
+        cx = struct_cx + lat_x
         cy = y1 + offset + text_h // 2
         angle = 0.0
     elif placement == "above":
-        cx = struct_cx
+        cx = struct_cx + lat_x
         cy = y0 - offset - text_h // 2
         angle = 0.0
     elif placement == "left":
         cx = x0 - offset - text_w // 2
-        cy = struct_cy
+        cy = struct_cy + lat_y
         angle = 0.0
-    else:  # right
+    elif placement == "right":
         cx = x1 + offset + text_w // 2
-        cy = struct_cy
+        cy = struct_cy + lat_y
+        angle = 0.0
+    elif placement == "bottom_right":
+        cx = x1 + offset + text_w // 2
+        cy = y1 + offset + text_h // 2
+        angle = 0.0
+    else:  # bottom_left
+        cx = x0 - offset - text_w // 2
+        cy = y1 + offset + text_h // 2
         angle = 0.0
 
     if placement in ("left", "right") and random.random() < cfg.label_90deg_prob:
@@ -243,7 +308,9 @@ def add_label_near_structure(
     elif random.random() < cfg.label_rotation_prob:
         angle = random.uniform(*cfg.label_rotation_range)
 
-    if random.random() < 0.30:
+    color_roll = random.random()
+    if color_roll < 0.30:
+        # Dark background with white text (slides, highlighted boxes)
         bg_color = random.choice(
             [
                 (0, 0, 0),
@@ -252,9 +319,23 @@ def add_label_near_structure(
                 (80, 0, 0),
                 (0, 60, 0),
                 (60, 0, 80),
+                (20, 20, 60),
+                (50, 25, 0),
             ]
         )
         fill_color = (255, 255, 255)
+    elif color_roll < 0.38:
+        # Mid-grey text — common in some journal figure styles
+        v = random.randint(60, 120)
+        bg_color = None
+        fill_color = (v, v, v)
+    elif color_roll < 0.44:
+        # Coloured text: red / blue / dark-green — used in some journals to
+        # distinguish series (e.g. red = series A, blue = series B)
+        bg_color = None
+        fill_color = random.choice(
+            [(160, 0, 0), (0, 0, 160), (0, 100, 0), (100, 0, 100)]
+        )
     else:
         bg_color = None
         fill_color = (0, 0, 0)

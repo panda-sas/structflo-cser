@@ -131,7 +131,7 @@ Example:
         "--min-mw", type=float, default=150.0, help="Minimum molecular weight"
     )
     parser.add_argument(
-        "--max-mw", type=float, default=900.0, help="Maximum molecular weight"
+        "--max-mw", type=float, default=1800.0, help="Maximum molecular weight"
     )
     args = parser.parse_args()
 

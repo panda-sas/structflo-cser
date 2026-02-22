@@ -182,20 +182,25 @@ def make_data_card_page(
         return page, []
 
     sw, sh = struct_img.size
-    sx = (cfg.page_w - sw) // 2
+    # Real registration cards vary: centred, slightly left, slightly right.
+    _sx_jitter = random.randint(-(cfg.page_w - sw) // 6, (cfg.page_w - sw) // 6)
+    sx = (cfg.page_w - sw) // 2 + _sx_jitter
     sy = hdr_h + margin + (struct_area_h - sh) // 2
     page.paste(struct_img, (sx, sy), struct_img)
     struct_box = (sx, sy, sx + sw, sy + sh)
 
-    # ---- Compound ID — large, centred below structure ----
+    # ---- Compound ID ----
     label = random_label()
     id_sz = max(int(28 * scale), int(sw * 0.09))
-    id_font = load_font(font_paths, id_sz, prefer_bold=True)
+    # 50 % bold / 50 % regular — real formats vary across ChemDraw, ISIS, and viewer exports.
+    id_font = load_font(font_paths, id_sz, prefer_bold=random.random() < 0.5)
 
-    # Approximate vertical centre for draw_rotated_text (it centres at cy).
-    # Use id_sz as a rough estimate of half the rendered height.
-    label_cx = cfg.page_w // 2
-    label_cy = sy + sh + max(int(20 * scale), 12) + id_sz
+    # Horizontal offset from structure centre: real cards are not always pixel-perfect.
+    _lbl_x_jitter = random.randint(-sw // 3, sw // 3)
+    label_cx = sx + sw // 2 + _lbl_x_jitter
+    # Variable gap between structure bottom and label (8–40 px at 300 DPI).
+    _gap = random.randint(max(int(8 * scale), 5), max(int(40 * scale), 20))
+    label_cy = sy + sh + _gap + id_sz
 
     style = random.choice(["box", "underline", "plain", "colored_text"])
     fill = hdr_color if style == "colored_text" else (20, 20, 20)
@@ -321,16 +326,23 @@ def make_sar_page(
         page.paste(scaffold_img, (sx, sy), scaffold_img)
 
         core_sz = max(9, int(t_sz * 0.88))
-        core_font_b = load_font(font_paths, core_sz, prefer_bold=True)
-        rx = sx + sw + int(40 * scale)
+        # 60 % bold — scaffold ID is often prominent but not always.
+        core_font_b = load_font(font_paths, core_sz, prefer_bold=random.random() < 0.6)
+        # Horizontal gap between scaffold image and its annotation varies across tools.
+        rx = sx + sw + random.randint(int(20 * scale), int(65 * scale))
 
         draw.text((rx, sy), "Core scaffold:", font=core_font_b, fill=(60, 60, 60))
         sc_label = random_label()
-        sly = sy + int(core_sz * 1.9)
-        # Centre draw_rotated_text at the left-align equivalent start + half-width
+        # Vertical distance between the header text and the compound ID also varies.
+        sly = sy + random.randint(int(core_sz * 1.4), int(core_sz * 2.4))
         sc_meta = draw.textbbox((0, 0), sc_label, font=core_font_b)
         sc_cx = rx + (sc_meta[2] - sc_meta[0]) // 2
-        sc_cy = sly + (sc_meta[3] - sc_meta[1]) // 2
+        # Small vertical jitter so sc_cy is not always exactly mid-text.
+        sc_cy = (
+            sly
+            + (sc_meta[3] - sc_meta[1]) // 2
+            + random.randint(-int(6 * scale), int(6 * scale))
+        )
         sc_label_box = draw_rotated_text(
             page, sc_label, (sc_cx, sc_cy), core_font_b, 0.0, fill=(30, 30, 120)
         )
@@ -416,7 +428,7 @@ def make_sar_page(
     cell_sz = max(8, int(row_h * 0.11))
     cell_font = load_font(font_paths, cell_sz)
     id_font_sz = max(8, int(id_col_w * 0.10))
-    id_font = load_font(font_paths, id_font_sz)
+    # id_font is chosen per-row (bold/regular varies across real SAR table exports).
 
     used_smis = {scaffold_smi} if scaffold_smi else set()
     smi_list = [s for s in smiles_pool if s not in used_smis]
@@ -430,11 +442,16 @@ def make_sar_page(
         if struct_img is None:
             continue
 
-        # Compound ID — centred vertically in the ID column
+        # Compound ID — position and font vary per row (real SAR tables from
+        # different tools have left/centre/right alignment and varying vertical
+        # padding; scripted generators always produce pixel-identical placements).
         label = random_label()
-        lcx = col_xs[0] + id_col_w // 2
-        lcy = y_cursor + row_h // 2
-        label_box = draw_rotated_text(page, label, (lcx, lcy), id_font, 0.0)
+        _row_font = load_font(font_paths, id_font_sz, prefer_bold=random.random() < 0.5)
+        _h_jitter = random.randint(-id_col_w // 4, id_col_w // 4)
+        _v_jitter = random.randint(-row_h // 4, row_h // 4)
+        lcx = col_xs[0] + id_col_w // 2 + _h_jitter
+        lcy = y_cursor + row_h // 2 + _v_jitter
+        label_box = draw_rotated_text(page, label, (lcx, lcy), _row_font, 0.0)
 
         # Structure
         sw, sh = struct_img.size
@@ -610,7 +627,10 @@ def make_mmp_page(
             struct_box = (sx, sy, sx + sw, sy + sh)
 
             label = random_label()
-            label_cx = panel_x + struct_panel_w // 2
+            # Horizontal jitter so dx_norm (label_cx - struct_cx) / struct_w ≠ 0
+            # always. Without this every MMP label sits at the exact panel centre.
+            _jitter_x = random.randint(-sw // 4, sw // 4)
+            label_cx = panel_x + struct_panel_w // 2 + _jitter_x
             if label_above:
                 label_cy = y_cursor + struct_pad + id_h // 2
             else:
