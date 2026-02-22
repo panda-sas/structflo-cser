@@ -20,8 +20,21 @@ def _rand_prefix(min_len: int = 3, max_len: int = 6) -> str:
 LABEL_STYLES = {
     # CHEMBL2000, ZINC123456 — well-known DB prefix + 4-7 digits
     "chembl_like": lambda: (
-        random.choice(["CHEMBL", "PUBCHEM", "ZINC", "MCULE", "ENAMINE",
-                       "COCONUT", "STDINCHI", "DRUGBANK", "HMDB", "TBDA", "SACC"])
+        random.choice(
+            [
+                "CHEMBL",
+                "PUBCHEM",
+                "ZINC",
+                "MCULE",
+                "ENAMINE",
+                "COCONUT",
+                "STDINCHI",
+                "DRUGBANK",
+                "HMDB",
+                "TBDA",
+                "SACC",
+            ]
+        )
         + str(random.randint(100, 9_999_999))
     ),
     # SACC-33000, MERK-5512, LGENINA-90000 — 3-8 uppercase letters + dash + digits
@@ -45,22 +58,30 @@ LABEL_STYLES = {
         + str(random.randint(1, 99999)).zfill(5)
     ),
     # Simple integer: "1", "2", "42" — extremely common in journal figures
-    #"simple_number": lambda: str(random.randint(1, 50)),
-    
+    # "simple_number": lambda: str(random.randint(1, 50)),
     # Alphanumeric series: "1a", "2b", "3c" — SAR / MMP / congeneric series
-    #"alpha_number": lambda: str(random.randint(1, 30)) + random.choice("abcdefghij"),
+    # "alpha_number": lambda: str(random.randint(1, 30)) + random.choice("abcdefghij"),
     # Parenthesised: "(1)", "(2a)", "(15b)" — total synthesis, heterocycle papers
     # "parenthesized": lambda: (
     #     "(" + str(random.randint(1, 30))
     #     + random.choice(["", "a", "b", "c", "d", "e"])
     #     + ")"
     # ),
-    
-    
     # "compound-1", "Structure 5", "cpd-23" — very common in supplementary info
     "compound_style": lambda: (
-        random.choice(["compound", "Compound", "structure", "Structure",
-                       "cpd", "Cpd", "mol", "Mol", "cmpd"])
+        random.choice(
+            [
+                "compound",
+                "Compound",
+                "structure",
+                "Structure",
+                "cpd",
+                "Cpd",
+                "mol",
+                "Mol",
+                "cmpd",
+            ]
+        )
         + random.choice(["-", " "])
         + str(random.randint(1, 1000))
     ),

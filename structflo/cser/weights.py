@@ -65,17 +65,17 @@ REGISTRY: dict[str, dict[str, dict]] = {
         #     "requires": ">=0.1.0,<1.0.0",
         # },
         "v0.1": {
-            "repo_id":  "sidxz/structflo-cser-detector",
+            "repo_id": "sidxz/structflo-cser-detector",
             "filename": "best.pt",
             "revision": "weights-v0.1",
-            "sha256":   "2b139a7e78a6721f16187967bd782acf61e4c7389d2097ea05daeb942cda4bf5",
+            "sha256": "2b139a7e78a6721f16187967bd782acf61e4c7389d2097ea05daeb942cda4bf5",
             "requires": ">=0.1.0,<1.0.0",
         },
         "v0.2": {
-            "repo_id":  "sidxz/structflo-cser-detector",
+            "repo_id": "sidxz/structflo-cser-detector",
             "filename": "best.pt",
             "revision": "weights-v0.2",
-            "sha256":   "8b6d7373bedef50e25a48ef6ac333962d18861d30f98ee33f393cdf3d38f1c26",
+            "sha256": "8b6d7373bedef50e25a48ef6ac333962d18861d30f98ee33f393cdf3d38f1c26",
             "requires": ">=0.1.0,<1.0.0",
         },
     },
@@ -89,10 +89,10 @@ REGISTRY: dict[str, dict[str, dict]] = {
         #     "requires": ">=0.1.0,<1.0.0",
         # },
         "v0.1": {
-            "repo_id":  "sidxz/structflo-cser-lps",
+            "repo_id": "sidxz/structflo-cser-lps",
             "filename": "best.pt",
             "revision": "weights-v0.1",
-            "sha256":   "6b80327fe13b67b183e86558e8bac9141e6d1412e948c745b7ba5cfeb2df7b7d",
+            "sha256": "6b80327fe13b67b183e86558e8bac9141e6d1412e948c745b7ba5cfeb2df7b7d",
             "requires": ">=0.1.0,<1.0.0",
         },
     },
@@ -102,7 +102,7 @@ REGISTRY: dict[str, dict[str, dict]] = {
 # Keep in sync with REGISTRY — point to the newest entry per model.
 LATEST: dict[str, str | None] = {
     "cser-detector": "v0.2",
-    "cser-lps":      "v0.1",  # set to "v1.0" after first publish
+    "cser-lps": "v0.1",  # set to "v1.0" after first publish
 }
 
 
@@ -160,9 +160,7 @@ def resolve_weights(
     """
     if model not in REGISTRY:
         known = list(REGISTRY) or ["(none registered)"]
-        raise WeightsNotFoundError(
-            f"Unknown model '{model}'.  Known models: {known}"
-        )
+        raise WeightsNotFoundError(f"Unknown model '{model}'.  Known models: {known}")
 
     # --- Case 1: explicit local path ----------------------------------------
     if version is not None:

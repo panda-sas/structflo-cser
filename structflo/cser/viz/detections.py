@@ -231,10 +231,13 @@ def plot_crops(
         struct_crop = pil.crop((int(sb.x1), int(sb.y1), int(sb.x2), int(sb.y2)))
         axes[i, 0].imshow(struct_crop)
         match_str = (
-            f", match={pair.match_confidence:.2f}" if pair.match_confidence is not None else ""
+            f", match={pair.match_confidence:.2f}"
+            if pair.match_confidence is not None
+            else ""
         )
         axes[i, 0].set_title(
-            f"Pair {i} — Structure (det={pair.structure.conf:.2f}{match_str})", fontsize=10
+            f"Pair {i} — Structure (det={pair.structure.conf:.2f}{match_str})",
+            fontsize=10,
         )
         axes[i, 0].axis("off")
 
@@ -301,7 +304,9 @@ def plot_results(
             smiles = smiles[:max_smiles_len] + "…"
         label_txt = pair.label_text or "—"
         conf_str = (
-            f"  conf={pair.match_confidence:.2f}" if pair.match_confidence is not None else ""
+            f"  conf={pair.match_confidence:.2f}"
+            if pair.match_confidence is not None
+            else ""
         )
         annotation = f"#{i}  {label_txt}{conf_str}\n{smiles}"
         sb = pair.structure.bbox

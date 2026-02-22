@@ -47,7 +47,7 @@ def main() -> None:
         "--weights",
         default=None,
         help="Weights version tag (e.g. v1.0) or path to a local .pt file. "
-             "Defaults to the latest published weights (auto-downloaded).",
+        "Defaults to the latest published weights (auto-downloaded).",
     )
     p.add_argument(
         "--conf", type=float, default=0.3, help="Detection confidence threshold"

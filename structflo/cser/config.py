@@ -13,19 +13,26 @@ class PageConfig:
 
     # Structure rendering
     struct_size_range: Tuple[int, int] = (280, 550)
-    bond_width_range: Tuple[float, float] = (0.8, 5.0)   # was (1.5, 3.0); wider covers ChemDraw thin → bold scanned
-    atom_font_range: Tuple[int, int] = (10, 36)           # was (14, 28)
-    dark_bg_prob: float = 0.15                            # fraction of structures rendered on a dark background patch
+    bond_width_range: Tuple[float, float] = (
+        0.8,
+        5.0,
+    )  # was (1.5, 3.0); wider covers ChemDraw thin → bold scanned
+    atom_font_range: Tuple[int, int] = (10, 36)  # was (14, 28)
+    dark_bg_prob: float = (
+        0.15  # fraction of structures rendered on a dark background patch
+    )
 
     # Label rendering
-    label_font_range: Tuple[int, int] = (8, 48)           # was (12, 36)
+    label_font_range: Tuple[int, int] = (8, 48)  # was (12, 36)
     label_offset_range: Tuple[int, int] = (10, 20)
     label_rotation_prob: float = 0.15
     label_rotation_range: Tuple[int, int] = (-15, 15)
     label_90deg_prob: float = 0.03
 
     # Page background
-    page_bg_tint_prob: float = 0.12                       # cream / light-grey background instead of pure white
+    page_bg_tint_prob: float = (
+        0.12  # cream / light-grey background instead of pure white
+    )
 
     # Layout
     min_structures: int = 1

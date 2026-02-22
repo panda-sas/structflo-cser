@@ -61,10 +61,10 @@ def render_structure(smiles: str, size: int, cfg: PageConfig) -> Optional[Image.
         n_atoms = mol.GetNumAtoms()
         if n_atoms > 1:
             palette = [
-                (0.8, 0.1, 0.1),   # red   — e.g. reactive sites
+                (0.8, 0.1, 0.1),  # red   — e.g. reactive sites
                 (0.1, 0.1, 0.85),  # blue  — e.g. basic centres
                 (0.0, 0.55, 0.0),  # green — e.g. chiral centres
-                (0.7, 0.4, 0.0),   # orange
+                (0.7, 0.4, 0.0),  # orange
             ]
             n_hl = random.randint(1, min(3, n_atoms - 1))
             chosen = random.sample(range(n_atoms), n_hl)
@@ -73,8 +73,9 @@ def render_structure(smiles: str, size: int, cfg: PageConfig) -> Optional[Image.
             highlight_colors = {idx: color for idx in chosen}
 
     if highlight_atoms:
-        drawer.DrawMolecule(mol, highlightAtoms=highlight_atoms,
-                            highlightAtomColors=highlight_colors)
+        drawer.DrawMolecule(
+            mol, highlightAtoms=highlight_atoms, highlightAtomColors=highlight_colors
+        )
     else:
         drawer.DrawMolecule(mol)
     drawer.FinishDrawing()

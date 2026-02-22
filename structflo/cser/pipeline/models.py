@@ -60,10 +60,14 @@ class CompoundPair:
 
     structure: Detection
     label: Detection
-    match_distance: float  # matcher-specific cost (pixels for Hungarian, 1-score for LPS)
+    match_distance: (
+        float  # matcher-specific cost (pixels for Hungarian, 1-score for LPS)
+    )
     smiles: str | None = None
     label_text: str | None = None
-    match_confidence: float | None = None  # LPS probability in [0,1]; None for Hungarian
+    match_confidence: float | None = (
+        None  # LPS probability in [0,1]; None for Hungarian
+    )
 
     def to_dict(self) -> dict:
         d = {
@@ -73,7 +77,9 @@ class CompoundPair:
             "label_conf": round(self.label.conf, 4),
             "match_distance": round(self.match_distance, 2),
             "match_confidence": (
-                round(self.match_confidence, 4) if self.match_confidence is not None else None
+                round(self.match_confidence, 4)
+                if self.match_confidence is not None
+                else None
             ),
             "smiles": self.smiles,
             "label_text": self.label_text,

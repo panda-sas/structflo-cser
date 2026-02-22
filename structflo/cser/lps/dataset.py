@@ -72,7 +72,9 @@ def _augment_crop(
 
     # --- Spatial transforms ---
     angle = float(rng.uniform(-max_rot, max_rot))
-    img = img.rotate(angle, resample=Image.Resampling.BILINEAR, expand=False, fillcolor=255)
+    img = img.rotate(
+        angle, resample=Image.Resampling.BILINEAR, expand=False, fillcolor=255
+    )
 
     if rng.random() < p_flip:
         img = img.transpose(Image.Transpose.FLIP_LEFT_RIGHT)
@@ -84,7 +86,8 @@ def _augment_crop(
     if brightness_range > 0 and rng.random() < 0.70:
         arr = np.clip(
             arr * float(rng.uniform(1 - brightness_range, 1 + brightness_range)),
-            0.0, 1.0,
+            0.0,
+            1.0,
         )
 
     # Contrast jitter: stretch / compress histogram around mid-grey.
@@ -114,8 +117,12 @@ def _augment_crop(
     # Gaussian noise: scanner grain, compressed image quantisation
     if rng.random() < 0.20:
         arr = np.clip(
-            arr + rng.normal(0, float(rng.uniform(0.01, 0.04)), arr.shape).astype(np.float32),
-            0.0, 1.0,
+            arr
+            + rng.normal(0, float(rng.uniform(0.01, 0.04)), arr.shape).astype(
+                np.float32
+            ),
+            0.0,
+            1.0,
         )
 
     # JPEG recompression: many PDFs store pages as internal JPEG streams;
@@ -178,16 +185,18 @@ class PageGroupSampler(Sampler[int]):
         self._seed = seed
         self._epoch = 0
         unique = np.unique(path_idx)
-        self._groups: list[np.ndarray] = [
-            np.where(path_idx == p)[0] for p in unique
-        ]
+        self._groups: list[np.ndarray] = [np.where(path_idx == p)[0] for p in unique]
 
     def set_epoch(self, epoch: int) -> None:
         self._epoch = epoch
 
     def __iter__(self) -> Iterator[int]:
         rng = np.random.default_rng(self._seed + self._epoch)
-        order = rng.permutation(len(self._groups)) if self._shuffle else range(len(self._groups))
+        order = (
+            rng.permutation(len(self._groups))
+            if self._shuffle
+            else range(len(self._groups))
+        )
         for gi in order:
             group = self._groups[gi].copy()
             if self._shuffle:
@@ -310,7 +319,11 @@ class LPSDataset(Dataset):
 
             for i in range(n):
                 wrong = sorted(
-                    ((self._dist(structs[i], labels[j]), j) for j in range(n) if j != i),
+                    (
+                        (self._dist(structs[i], labels[j]), j)
+                        for j in range(n)
+                        if j != i
+                    ),
                     key=lambda t: t[0],
                 )
                 for _, j in wrong[:neg_per_pos]:
@@ -350,11 +363,13 @@ class LPSDataset(Dataset):
 
         if self.bbox_jitter > 0:
             bw, bh = s_bbox[2] - s_bbox[0], s_bbox[3] - s_bbox[1]
-            s_bbox += rng.uniform(-self.bbox_jitter, self.bbox_jitter, 4).astype(np.float32) * \
-                      np.array([bw, bh, bw, bh], dtype=np.float32)
+            s_bbox += rng.uniform(-self.bbox_jitter, self.bbox_jitter, 4).astype(
+                np.float32
+            ) * np.array([bw, bh, bw, bh], dtype=np.float32)
             lw, lh = l_bbox[2] - l_bbox[0], l_bbox[3] - l_bbox[1]
-            l_bbox += rng.uniform(-self.bbox_jitter, self.bbox_jitter, 4).astype(np.float32) * \
-                      np.array([lw, lh, lw, lh], dtype=np.float32)
+            l_bbox += rng.uniform(-self.bbox_jitter, self.bbox_jitter, 4).astype(
+                np.float32
+            ) * np.array([lw, lh, lw, lh], dtype=np.float32)
 
         geom = torch.from_numpy(
             geom_features(s_bbox, l_bbox, float(page_w), float(page_h))

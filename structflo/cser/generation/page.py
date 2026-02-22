@@ -23,7 +23,11 @@ from structflo.cser.distractors import (
     add_section_header,
     add_stray_text,
 )
-from structflo.cser.rendering.chemistry import _to_dark_mode, place_structure, render_structure
+from structflo.cser.rendering.chemistry import (
+    _to_dark_mode,
+    place_structure,
+    render_structure,
+)
 from structflo.cser.rendering.text import add_label_near_structure
 
 
@@ -213,8 +217,12 @@ def make_page(
         grid_positions = None
 
     _DARK_BG_COLORS = [
-        (15, 15, 15), (30, 30, 30), (20, 20, 55),
-        (35, 10, 10), (10, 35, 10), (40, 30, 0),
+        (15, 15, 15),
+        (30, 30, 30),
+        (20, 20, 55),
+        (35, 10, 10),
+        (10, 35, 10),
+        (40, 30, 0),
     ]
 
     grid_idx = 0
@@ -258,7 +266,9 @@ def make_page(
                 dark_bg=dark_color,
             )
         else:
-            box = place_structure(page, struct_img, cfg, existing_boxes, dark_bg=dark_color)
+            box = place_structure(
+                page, struct_img, cfg, existing_boxes, dark_bg=dark_color
+            )
 
         if box is None:
             continue

@@ -195,7 +195,7 @@ def main() -> None:
         "--weights",
         default=None,
         help="Weights version tag (e.g. v1.0) or path to a local .pt file. "
-             "Defaults to the latest published weights (auto-downloaded).",
+        "Defaults to the latest published weights (auto-downloaded).",
     )
     p.add_argument(
         "--out", default="detections", help="Output directory for visualisations"

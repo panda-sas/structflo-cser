@@ -338,7 +338,11 @@ def make_sar_page(
         sc_meta = draw.textbbox((0, 0), sc_label, font=core_font_b)
         sc_cx = rx + (sc_meta[2] - sc_meta[0]) // 2
         # Small vertical jitter so sc_cy is not always exactly mid-text.
-        sc_cy = sly + (sc_meta[3] - sc_meta[1]) // 2 + random.randint(-int(6 * scale), int(6 * scale))
+        sc_cy = (
+            sly
+            + (sc_meta[3] - sc_meta[1]) // 2
+            + random.randint(-int(6 * scale), int(6 * scale))
+        )
         sc_label_box = draw_rotated_text(
             page, sc_label, (sc_cx, sc_cy), core_font_b, 0.0, fill=(30, 30, 120)
         )

@@ -20,7 +20,7 @@ GEOM_DIM = 14  # length of the geometric feature vector produced by geom_feature
 # Fixed crop sizes fed to the CNN branches of VisualScorer.
 # (H, W) convention — structures are square, labels are wide/flat for text.
 STRUCT_CROP_SIZE: tuple[int, int] = (128, 128)
-LABEL_CROP_SIZE: tuple[int, int] = (64, 96)   # taller than before: handles rotated text
+LABEL_CROP_SIZE: tuple[int, int] = (64, 96)  # taller than before: handles rotated text
 
 
 # ---------------------------------------------------------------------------
@@ -30,7 +30,7 @@ LABEL_CROP_SIZE: tuple[int, int] = (64, 96)   # taller than before: handles rota
 
 def geom_features(
     struct_bbox: Sequence[float],  # [x1, y1, x2, y2] pixels
-    label_bbox: Sequence[float],   # [x1, y1, x2, y2] pixels
+    label_bbox: Sequence[float],  # [x1, y1, x2, y2] pixels
     page_w: float,
     page_h: float,
     struct_conf: float = 1.0,
@@ -83,12 +83,12 @@ def geom_features(
             math.sin(angle),
             math.cos(angle),
             (lw * lh) / max(sw * sh, 1e-6),  # size_ratio
-            lw / lh,                           # label_aspect
-            sw / sh,                           # struct_aspect
-            scx / max(page_w, 1.0),            # struct_page_x
-            scy / max(page_h, 1.0),            # struct_page_y
-            lcx / max(page_w, 1.0),            # label_page_x
-            lcy / max(page_h, 1.0),            # label_page_y
+            lw / lh,  # label_aspect
+            sw / sh,  # struct_aspect
+            scx / max(page_w, 1.0),  # struct_page_x
+            scy / max(page_h, 1.0),  # struct_page_y
+            lcx / max(page_w, 1.0),  # label_page_x
+            lcy / max(page_h, 1.0),  # label_page_y
             float(struct_conf),
             float(label_conf),
         ],
@@ -139,7 +139,11 @@ def crop_region(
     y2i = min(img_h, max(y1i + 1, int(round(y2))))
 
     patch = image[y1i:y2i, x1i:x2i]
-    pil = Image.fromarray(patch).convert("L") if patch.ndim == 3 else Image.fromarray(patch, mode="L")
+    pil = (
+        Image.fromarray(patch).convert("L")
+        if patch.ndim == 3
+        else Image.fromarray(patch, mode="L")
+    )
 
     out_h, out_w = out_size
     pil = pil.resize((out_w, out_h), Image.BILINEAR)

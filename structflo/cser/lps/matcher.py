@@ -106,19 +106,27 @@ class LearnedMatcher(BaseMatcher):
 
         geom_rows, struct_crops, label_crops = [], [], []
         for s in structures:
-            for l in labels:
+            for lbl in labels:
                 geom_rows.append(
                     geom_features(
-                        s.bbox.as_list(), l.bbox.as_list(),
-                        page_w, page_h, s.conf, l.conf,
+                        s.bbox.as_list(),
+                        lbl.bbox.as_list(),
+                        page_w,
+                        page_h,
+                        s.conf,
+                        lbl.conf,
                     )
                 )
-                struct_crops.append(crop_region(image, s.bbox.as_list(), STRUCT_CROP_SIZE))
-                label_crops.append(crop_region(image, l.bbox.as_list(), LABEL_CROP_SIZE))
+                struct_crops.append(
+                    crop_region(image, s.bbox.as_list(), STRUCT_CROP_SIZE)
+                )
+                label_crops.append(
+                    crop_region(image, lbl.bbox.as_list(), LABEL_CROP_SIZE)
+                )
 
         geom_t = torch.from_numpy(np.stack(geom_rows)).to(self._device)
-        sc_t   = torch.from_numpy(np.stack(struct_crops)).to(self._device)
-        lc_t   = torch.from_numpy(np.stack(label_crops)).to(self._device)
+        sc_t = torch.from_numpy(np.stack(struct_crops)).to(self._device)
+        lc_t = torch.from_numpy(np.stack(label_crops)).to(self._device)
 
         with torch.no_grad():
             scores = self._model(sc_t, lc_t, geom_t).sigmoid().squeeze(1).cpu().numpy()
@@ -152,7 +160,7 @@ class LearnedMatcher(BaseMatcher):
             )
 
         structures = [d for d in detections if d.class_id == 0]
-        labels     = [d for d in detections if d.class_id == 1]
+        labels = [d for d in detections if d.class_id == 1]
 
         if not structures or not labels:
             return []
@@ -163,18 +171,18 @@ class LearnedMatcher(BaseMatcher):
             valid_s, valid_l = set(), set()
             for i, s in enumerate(structures):
                 scx, scy = s.bbox.centroid
-                for j, l in enumerate(labels):
-                    lcx, lcy = l.bbox.centroid
+                for j, lbl in enumerate(labels):
+                    lcx, lcy = lbl.bbox.centroid
                     if ((scx - lcx) ** 2 + (scy - lcy) ** 2) ** 0.5 <= self.max_dist_px:
                         valid_s.add(i)
                         valid_l.add(j)
             structures = [structures[i] for i in sorted(valid_s)]
-            labels     = [labels[j]     for j in sorted(valid_l)]
+            labels = [labels[j] for j in sorted(valid_l)]
             if not structures or not labels:
                 return []
 
         score_matrix = self._score_matrix(structures, labels, image, page_w, page_h)
-        cost_matrix  = 1.0 - score_matrix
+        cost_matrix = 1.0 - score_matrix
         row_ind, col_ind = linear_sum_assignment(cost_matrix)
 
         pairs = []

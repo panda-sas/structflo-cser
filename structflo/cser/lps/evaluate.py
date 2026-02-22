@@ -47,7 +47,9 @@ def _centroids_close(a: list[float], b: list[float], tol: float = _TOL) -> bool:
     return abs(ax - bx) < tol and abs(ay - by) < tol
 
 
-def _page_correct(pairs, gt_structs: list[list[float]], gt_labels: list[list[float]]) -> bool:
+def _page_correct(
+    pairs, gt_structs: list[list[float]], gt_labels: list[list[float]]
+) -> bool:
     if len(pairs) != len(gt_structs):
         return False
     for pair in pairs:
@@ -67,8 +69,12 @@ def _page_correct(pairs, gt_structs: list[list[float]], gt_labels: list[list[flo
 def _build_detections(valid_entries: list[dict]) -> list[Detection]:
     detections = []
     for entry in valid_entries:
-        detections.append(Detection(bbox=BBox(*entry["struct_bbox"]), conf=1.0, class_id=0))
-        detections.append(Detection(bbox=BBox(*entry["label_bbox"]),  conf=1.0, class_id=1))
+        detections.append(
+            Detection(bbox=BBox(*entry["struct_bbox"]), conf=1.0, class_id=0)
+        )
+        detections.append(
+            Detection(bbox=BBox(*entry["label_bbox"]), conf=1.0, class_id=1)
+        )
     return detections
 
 
@@ -97,11 +103,11 @@ def evaluate(
     """
     from structflo.cser.lps.matcher import LearnedMatcher
 
-    gt_dir  = val_dir / "ground_truth"
+    gt_dir = val_dir / "ground_truth"
     img_dir = val_dir / "images"
 
     hungarian = HungarianMatcher()
-    learned   = LearnedMatcher(weights=weights, device=device)
+    learned = LearnedMatcher(weights=weights, device=device)
 
     h_correct = l_correct = total = 0
 
@@ -117,7 +123,7 @@ def evaluate(
             continue
 
         gt_structs = [e["struct_bbox"] for e in valid]
-        gt_labels  = [e["label_bbox"]  for e in valid]
+        gt_labels = [e["label_bbox"] for e in valid]
         detections = _build_detections(valid)
 
         stem = json_path.stem
@@ -139,8 +145,8 @@ def evaluate(
         if total % 500 == 0:
             print(
                 f"  {total:>5} pages  "
-                f"Hungarian: {h_correct/total:.2%}  "
-                f"Learned: {l_correct/total:.2%}"
+                f"Hungarian: {h_correct / total:.2%}  "
+                f"Learned: {l_correct / total:.2%}"
             )
 
     h_acc = h_correct / max(total, 1)
@@ -162,13 +168,25 @@ def main() -> None:
     p = argparse.ArgumentParser(
         description="Evaluate LearnedMatcher vs HungarianMatcher on page-level pair accuracy"
     )
-    p.add_argument("--weights", type=Path, required=True,
-                   help="Path to trained PairScorer checkpoint (scorer_best.pt)")
-    p.add_argument("--data-dir", type=Path, default=_DEFAULT_VAL_DIR,
-                   help="Validation split directory (default: data/generated/val)")
+    p.add_argument(
+        "--weights",
+        type=Path,
+        required=True,
+        help="Path to trained PairScorer checkpoint (scorer_best.pt)",
+    )
+    p.add_argument(
+        "--data-dir",
+        type=Path,
+        default=_DEFAULT_VAL_DIR,
+        help="Validation split directory (default: data/generated/val)",
+    )
     p.add_argument("--device", default="cuda")
-    p.add_argument("--max-pages", type=int, default=None,
-                   help="Limit evaluation to first N pages (quick sanity check)")
+    p.add_argument(
+        "--max-pages",
+        type=int,
+        default=None,
+        help="Limit evaluation to first N pages (quick sanity check)",
+    )
 
     args = p.parse_args()
 
