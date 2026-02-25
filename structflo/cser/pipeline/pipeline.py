@@ -12,7 +12,8 @@ from PIL import Image
 from structflo.cser.inference.detector import detect_full, detect_tiled
 from structflo.cser.weights import resolve_weights
 
-from structflo.cser.pipeline.matcher import BaseMatcher, HungarianMatcher
+from structflo.cser.lps import LearnedMatcher
+from structflo.cser.pipeline.matcher import BaseMatcher
 from structflo.cser.pipeline.models import BBox, CompoundPair, Detection
 from structflo.cser.pipeline.ocr import BaseOCR, EasyOCRExtractor
 from structflo.cser.pipeline.smiles_extractor import (
@@ -76,7 +77,8 @@ class ChemPipeline:
             weights:          Weights version tag (e.g. ``"v1.0"``) or path to a
                               local ``.pt`` file.  ``None`` auto-downloads the
                               latest published weights.
-            matcher:          Pairing strategy.  Defaults to HungarianMatcher.
+            matcher:          Pairing strategy.  Defaults to LearnedMatcher
+                              (auto-downloads weights from HuggingFace Hub).
             smiles_extractor: SMILES model.  Defaults to DecimerExtractor.
             ocr:              OCR engine.  Defaults to PaddleOCRExtractor.
             tile:             Use sliding-window tiling during detection.
@@ -86,7 +88,7 @@ class ChemPipeline:
                               Defaults to True to match training data distribution.
         """
         self._weights = weights  # version tag, local path str/Path, or None
-        self._matcher = matcher or HungarianMatcher()
+        self._matcher = matcher or LearnedMatcher()
         self._smiles = smiles_extractor or DecimerExtractor()
         self._ocr = ocr or EasyOCRExtractor()
         self.tile = tile
@@ -189,6 +191,64 @@ class ChemPipeline:
         detections = self.detect(img)
         pairs = self.match(detections, image=img)
         return self.enrich(pairs, img)
+
+    def process_pdf(
+        self,
+        pdf_path: Path | str,
+        *,
+        dpi: int = 150,
+        output_pdf: Path | str | None = None,
+    ) -> list[list[CompoundPair]]:
+        """Run the full pipeline on every page of a PDF.
+
+        Pages are processed one at a time so memory usage stays bounded
+        regardless of document length.
+
+        Args:
+            pdf_path:   Path to the input PDF.
+            dpi:        Rendering resolution.  150 dpi works well for typical
+                        journal pages; use 200-300 for small or dense text.
+            output_pdf: Optional path for an annotated output PDF.  When given,
+                        each page is rendered with bounding boxes, pairing
+                        lines, and extracted SMILES / label text, then saved
+                        as a multi-page PDF.
+
+        Returns:
+            A list with one entry per page; each entry is a list of
+            ``CompoundPair`` objects with ``smiles`` and ``label_text``
+            populated.
+        """
+        import fitz  # pymupdf — required dependency
+
+        doc = fitz.open(str(pdf_path))
+        mat = fitz.Matrix(dpi / 72, dpi / 72)
+        all_results: list[list[CompoundPair]] = []
+
+        if output_pdf is not None:
+            import matplotlib.pyplot as plt
+            from matplotlib.backends.backend_pdf import PdfPages
+            from structflo.cser.viz import plot_results
+
+            pdf_out: PdfPages | None = PdfPages(str(output_pdf))
+        else:
+            pdf_out = None
+
+        try:
+            for page in doc:
+                pix = page.get_pixmap(matrix=mat, colorspace=fitz.csRGB)
+                img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+                pairs = self.process(img)
+                all_results.append(pairs)
+                if pdf_out is not None:
+                    fig = plot_results(img, pairs)
+                    pdf_out.savefig(fig, bbox_inches="tight")
+                    plt.close(fig)
+        finally:
+            doc.close()
+            if pdf_out is not None:
+                pdf_out.close()
+
+        return all_results
 
     # ------------------------------------------------------------------
     # Output helpers  (static — can also be called on the class directly)

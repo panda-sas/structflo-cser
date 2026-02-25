@@ -1,258 +1,305 @@
-# structflo-cser
+<h1 align="center">structflo.cser</h1>
 
-YOLO11l-based detector for chemical structures and their compound label IDs in scientific documents.
+<p align="center">
+  <img src="./docs/images/example-1.png" alt="structflo.cser — detection and pairing example" width="700">
+</p>
 
-Part of the **structflo** library. Import as:
-```python
-from structflo.cser.pipeline import ChemPipeline
-```
+<p align="center">
+  <a href="https://pepy.tech/projects/structflo-cser"><img src="https://static.pepy.tech/personalized-badge/structflo-cser?period=total&units=INTERNATIONAL_SYSTEM&left_color=BLACK&right_color=GREEN&left_text=downloads" alt="PyPI Downloads"></a>
+  <a href="https://github.com/structflo/structflo-cser/actions"><img src="https://img.shields.io/github/actions/workflow/status/structflo/structflo-cser/ci.yml?label=tests" alt="Tests"></a>
+  <a href="https://github.com/structflo/structflo-cser/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-green.svg" alt="License"></a>
+  <a href="https://www.linkedin.com/in/sidxz/"><img src="https://img.shields.io/badge/LinkedIn-blue?logo=linkedin&logoColor=white" alt="LinkedIn"></a>
+  <a href="https://github.com/sidxz/"><img src="https://img.shields.io/badge/GitHub-black?logo=github&logoColor=white" alt="GitHub"></a>
+</p>
 
-**Detection target:** A single bounding box (`compound_panel`) enclosing the union of a rendered chemical structure and its nearby label ID (e.g. `CHEMBL12345`).
+<p align="center">
+  Chemical structure and label extraction from scientific documents.
+</p>
+
+<p align="center">
+  <a href="#installation">Installation</a> &bull;
+  <a href="#quick-start">Quick Start</a> &bull;
+  <a href="#step-by-step-pipeline">Step-by-Step</a> &bull;
+  <a href="#matchers">Matchers</a> &bull;
+  <a href="#downstream-processing">Downstream Processing</a> &bull;
+  <a href="#notebooks">Notebooks</a>
+</p>
 
 ---
+
+**structflo.cser** extracts chemical structure–label pairs from images and PDF pages. It uses a fine-tuned YOLO detector trained on synthetic chemical structure data to locate structures and compound labels on a page, then pairs them using Learned Pair Scorer (LPS) model or a simpler Hungarian Matcher.
+
+The extracted crops can be passed to any structure-to-SMILES converter (DECIMER, MolScribe) and any OCR engine for label text. DECIMER and EasyOCR are bundled for convenience, but any downstream tools can be swapped in.
+
+**Two-step process:**
+
+1. **Detect** — A fine-tuned YOLO detector finds all chemical structures and compound labels in the image
+2. **Match** — A matcher pairs each structure with its corresponding label, producing cropped image pairs
+
+|                   | `LearnedMatcher` (default)              | `HungarianMatcher`              |
+| ----------------- | --------------------------------------- | ------------------------------- |
+| Approach          | Neural Pair Scorer (LPS)                | Geometric (centroid distance)   |
+| Setup             | Auto-downloads weights                  | Zero config                     |
+| Speed             | Fast (GPU accelerated)                  | Instantaneous                   |
+| Accuracy          | Better for complex or crowded pages     | Good for simple layouts         |
+| Output            | `CompoundPair`                          | `CompoundPair` (identical)      |
 
 ## Installation
 
 ```bash
-uv pip install -e .
+pip install structflo-cser
 ```
-
-This installs all dependencies and registers the `sf-*` CLI commands on your PATH.
-
----
-
-## Pipeline
-
-```
-1. Fetch SMILES          →  sf-fetch-smiles
-2. Download distractors  →  sf-download-distractors   (optional but recommended)
-3. Generate dataset      →  sf-generate
-4. Visualize labels      →  sf-viz                    (optional QA check)
-5. Train YOLO            →  sf-train
-6. Run inference         →  sf-detect
-7. Annotate real PDFs    →  sf-annotate               (optional)
-```
-
----
-
-## Commands
-
-### 1. Fetch SMILES from ChEMBL
-
-Extracts ~20 k small-molecule SMILES from a local [ChEMBL SQLite database](https://ftp.ebi.ac.uk/pub/databases/chembl/ChEMBLdb/latest/).
 
 ```bash
-sf-fetch-smiles \
-  --db chembl_35/chembl_35_sqlite/chembl_35.db \
-  --output data/smiles/chembl_smiles.csv \
-  --n 20000
+# or with uv
+uv add structflo-cser
 ```
 
-Output: `data/smiles/chembl_smiles.csv`
+This also installs DECIMER and EasyOCR for downstream SMILES and text extraction. The core pipeline does not depend on them — any extractor implementation can be swapped in.
 
----
+## Quick Start
 
-### 2. Download distractor images
+One call from image to `(SMILES, label)` pairs:
 
-Downloads real photographs from [Lorem Picsum](https://picsum.photos/) to use as hard-negative distractors during page generation.
+```python
+from structflo.cser.pipeline import ChemPipeline
+from structflo.cser.lps import LearnedMatcher
+
+pipeline = ChemPipeline(matcher=LearnedMatcher())
+results = pipeline.process("page.png")
+
+for pair in results:
+    print(pair.smiles, pair.label_text)
+```
+
+Weights for both the detector and the LPS are auto-downloaded from HuggingFace Hub on first use.
+
+Export to a pandas DataFrame or JSON:
+
+```python
+df   = ChemPipeline.to_dataframe(results)
+data = ChemPipeline.to_json(results)
+```
+
+```
+   match_distance  match_confidence                              smiles     label_text
+0          135.19            0.9844  CN1CCC2=C(C1)SC(=N2)C(=O)NC3=...      7178-39-6
+1          208.40            0.9973  C1=CC(=CC=C1C2=C(C(=O)O)N=NN2...     72804-12-9
+2          126.25            0.9997  COC1=CC=C(C=C1)C=C2C(=O)N(C3=...   ZINC2978 720
+```
+
+### PDF input
+
+For PDFs, use `process_pdf()` — it renders each page and returns one result list per page:
+
+```python
+from structflo.cser.pipeline import ChemPipeline
+from structflo.cser.lps import LearnedMatcher
+
+pipeline = ChemPipeline(matcher=LearnedMatcher())
+
+# Returns list[list[CompoundPair]] — one inner list per page
+all_pages = pipeline.process_pdf("paper.pdf")
+
+for page_num, pairs in enumerate(all_pages):
+    print(f"Page {page_num + 1}: {len(pairs)} compound pairs")
+    for pair in pairs:
+        print(f"  {pair.label_text:20s}  {pair.smiles}")
+```
+
+Pass `output_pdf` to save an annotated copy with bounding boxes and extracted data overlaid:
+
+```python
+pipeline.process_pdf("paper.pdf", output_pdf="paper_annotated.pdf")
+```
+
+## Step-by-Step Pipeline
+
+For finer control, each stage is exposed individually.
+
+### 1. Create the pipeline
+
+```python
+from structflo.cser.pipeline import ChemPipeline
+
+# Default: LearnedMatcher — auto-downloads LPS weights on first use
+pipeline = ChemPipeline(tile=False, conf=0.70)
+```
+
+For a heuristic based approach, use `HungarianMatcher`:
+
+```python
+from structflo.cser.pipeline import ChemPipeline, HungarianMatcher
+
+pipeline = ChemPipeline(
+    tile=False,
+    conf=0.70,
+    matcher=HungarianMatcher(max_distance=500),
+)
+```
+
+The pipeline is lazy — detector weights, DECIMER, and EasyOCR are loaded on first use only.
+
+### 2. Detect
+
+```python
+detections = pipeline.detect("page.png")
+
+n_struct = sum(1 for d in detections if d.class_id == 0)
+n_label  = sum(1 for d in detections if d.class_id == 1)
+print(f"Found {n_struct} structures and {n_label} labels")
+# Found 6 structures and 6 labels
+```
+
+`class_id=0` = chemical structure &nbsp;|&nbsp; `class_id=1` = compound label
+
+### 3. Match
+
+```python
+pairs = pipeline.match(detections)
+# Matched 6 structure–label pairs
+#   Pair 0: distance=135px  structure@(490,421)  label@(489,285)
+#   Pair 1: distance=208px  structure@(258,194)  label@(466,195)
+```
+
+### 4. Visualise
+
+```python
+from structflo.cser.viz import plot_detections, plot_pairs, plot_crops, plot_results
+
+fig = plot_detections(img, detections)   # green = structure, blue = label
+fig = plot_pairs(img, pairs)             # orange lines connect matched pairs
+fig = plot_crops(img, pairs)             # cropped structure and label regions
+fig = plot_results(img, results)         # final annotated output
+```
+
+![Detection and pairing visualisation](docs/images/example-2.png)
+
+### 5. Enrich — SMILES and label text
+
+```python
+enriched = pipeline.enrich(pairs, "page.png")
+
+for i, p in enumerate(enriched):
+    print(f"Pair {i}:")
+    print(f"  SMILES:     {p.smiles}")
+    print(f"  Label text: {p.label_text}")
+```
+
+```
+Pair 0:
+  SMILES:     CN1CCC2=C(C1)SC(=N2)C(=O)NC3=C(C=CC=C3)CNC(=O)C4=CC=CC(=C4)Cl
+  Label text: 7178-39-6
+
+Pair 1:
+  SMILES:     C1=CC(=CC=C1C2=C(C(=O)O)N=NN2C3=CC=C(C=C3)S(=O)(=O)N)Br
+  Label text: 72804-12-9
+```
+
+## Matchers
+
+### Learned Pair Scorer — `LearnedMatcher` (default)
+
+A neural matcher trained to score structure–label compatibility using both visual crops and geometric features. It replaces the raw distance cost matrix with a learned association probability, then solves global assignment with the Hungarian algorithm.
+
+Weights are auto-downloaded from HuggingFace Hub on first use — no manual setup needed. Models are hosted at:
+
+- Detector: [huggingface.co/sidxz/structflo-cser-detector](https://huggingface.co/sidxz/structflo-cser-detector)
+- LPS scorer: [huggingface.co/sidxz/structflo-cser-lps](https://huggingface.co/sidxz/structflo-cser-lps)
+
+```python
+from structflo.cser.pipeline import ChemPipeline
+from structflo.cser.lps import LearnedMatcher
+
+pipeline = ChemPipeline(
+    matcher=LearnedMatcher(
+        min_score=0.5,      # drop pairs below this confidence
+        max_dist_px=None,   # optional centroid pre-filter to save compute
+    )
+)
+```
+
+`min_score` — pairs scoring below this threshold are discarded as unlabelled structures.
+
+### Hungarian Matcher — `HungarianMatcher` (fallback)
+
+Pairs structures and labels by minimising total centroid-to-centroid distance. Zero config, zero weights download. Useful for simple document layouts or as a fast sanity check.
+
+```python
+from structflo.cser.pipeline import ChemPipeline, HungarianMatcher
+
+pipeline = ChemPipeline(
+    matcher=HungarianMatcher(max_distance=500),
+)
+```
+
+`max_distance` — maximum pixel distance for a valid pair. Increase for large pages; reduce to avoid false pairings on dense layouts.
+
+## Downstream Processing
+
+**structflo.cser** outputs cropped image pairs. Plug in any converter for SMILES and any OCR for label text.
+
+### SMILES extraction
+
+DECIMER is bundled by default. Swap for MolScribe or any custom `BaseSmilesExtractor`:
+
+```python
+from structflo.cser.pipeline.smiles_extractor import BaseSmilesExtractor
+
+class MyExtractor(BaseSmilesExtractor):
+    def extract(self, image) -> str:
+        return my_model.predict(image)
+
+pipeline = ChemPipeline(smiles_extractor=MyExtractor())
+```
+
+### OCR
+
+EasyOCR is bundled by default. Swap for any custom `BaseOCR`:
+
+```python
+from structflo.cser.pipeline.ocr import BaseOCR
+
+class MyOCR(BaseOCR):
+    def extract(self, image) -> str:
+        return my_ocr.read(image)
+
+pipeline = ChemPipeline(ocr=MyOCR())
+```
+
+## CLI
+
+Run extraction directly from the terminal:
 
 ```bash
-sf-download-distractors --out data/distractors --count 1000
+# Detect and pair structures/labels in a directory of images
+sf-detect --image_dir data/test_images/ --conf 0.60 --no_tile --pair --max_dist 500
+
+# Full pipeline: detect → match → SMILES + OCR
+sf-extract page.png
 ```
 
----
+All available commands:
 
-### 3. Generate synthetic dataset
+| Command                   | Description                                |
+| ------------------------- | ------------------------------------------ |
+| `sf-detect`               | Run YOLO detection on images               |
+| `sf-extract`              | Full pipeline: detect → match → extract    |
+| `sf-generate`             | Generate synthetic training data           |
+| `sf-train`                | Train the YOLO detection model             |
+| `sf-train-lps`            | Train the Learned Pair Scorer              |
+| `sf-eval-lps`             | Evaluate LPS on a test set                |
+| `sf-fetch-smiles`         | Download SMILES from ChEMBL               |
+| `sf-download-distractors` | Download distractor images for generation  |
+| `sf-annotate`             | Launch the web annotation server           |
 
-Generates document-like pages (A4 @ 300 DPI or slide format) containing chemical structures, compound labels, and distractor elements.
+## Notebooks
 
-```bash
-sf-generate \
-  --smiles data/smiles/chembl_smiles.csv \
-  --out data/generated \
-  --num-train 2000 --num-val 400 \
-  --fonts-dir data/fonts \
-  --distractors-dir data/distractors \
-  --dpi 96,144,200,300 \
-  --workers 0
-```
+| Notebook | Description |
+| -------- | ----------- |
+| [01-quickstart.ipynb](notebooks/01-quickstart.ipynb) | Step-by-step pipeline walkthrough: detect → match → enrich, then one-call convenience API |
+| [02-LPS.ipynb](notebooks/02-LPS.ipynb) | Using the Learned Pair Scorer for improved matching on complex document pages |
 
-Key options:
+## License
 
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--num-train` | 2000 | Number of training pages |
-| `--num-val` | 200 | Number of validation pages |
-| `--dpi` | `96,144,200,300` | DPI values randomly sampled per page |
-| `--grayscale` / `--no-grayscale` | on | Convert pages to grayscale |
-| `--workers` | 0 (all CPUs) | Parallel workers; use `1` to disable multiprocessing |
-
-**Output structure:**
-```
-data/generated/
-├── train/
-│   ├── images/         (JPEG pages)
-│   ├── labels/         (YOLO .txt — union bbox per compound panel)
-│   └── ground_truth/   (JSON with split struct_bbox / label_bbox / smiles)
-└── val/
-    ├── images/
-    ├── labels/
-    └── ground_truth/
-```
-
----
-
-### 4. Visualize labels (QA)
-
-Overlays YOLO bounding boxes on a random sample of generated pages.
-
-```bash
-sf-viz --split both --n 30 --out data/viz
-```
-
-Green boxes = `chemical_structure`, blue boxes = `compound_label`.
-
----
-
-### 5. Train
-
-Fine-tunes YOLO11l on the generated dataset.
-
-```bash
-sf-train --epochs 50 --imgsz 1280 --batch 8
-```
-
-Key options:
-
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--weights` | `yolo11l.pt` | Pretrained backbone |
-| `--imgsz` | 1280 | Training resolution |
-| `--batch` | 8 | Batch size (safe for A6000 48 GB) |
-| `--resume` | — | Path to `last.pt` to resume an interrupted run |
-
-**Output:** `runs/labels_detect/yolo11l_panels/weights/best.pt`
-
----
-
-### 6. Detect
-
-Runs the trained detector on images using sliding-window tiling (1536 px tiles, 20 % overlap).
-
-```bash
-# Single image
-sf-detect --image page.png
-
-# Directory of images
-sf-detect --image_dir data/real/images/ --out detections/
-
-# With Hungarian pairing of structures → labels
-sf-detect --image page.png --pair --max_dist 300
-```
-
-Key options:
-
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--weights` | `runs/.../best.pt` | Model weights |
-| `--conf` | 0.3 | Confidence threshold |
-| `--tile_size` | 1536 | Tile size in pixels |
-| `--no_tile` | off | Run on full image (skips tiling) |
-| `--grayscale` | off | Convert to grayscale before detection |
-| `--pair` | off | Hungarian match structures → labels |
-
----
-
-### 7. Annotate real PDFs (optional)
-
-Web-based annotation tool for creating ground truth from real PDF documents.
-
-```bash
-sf-annotate --out data/real --port 8000
-# then open http://127.0.0.1:8000 in a browser
-```
-
----
-
-## Package layout
-
-```
-structflo/cser/              # importable package (from structflo.cser import ...)
-├── _geometry.py             # shared bbox utilities (boxes_intersect, try_place_box)
-├── config.py                # PageConfig dataclass + make_page_config()
-├── data/
-│   ├── smiles.py            # load_smiles(), fetch_smiles_from_chembl_sqlite()
-│   └── distractor_images.py # load_distractor_images(), download_picsum()
-├── rendering/
-│   ├── chemistry.py         # render_structure(), place_structure()
-│   └── text.py              # draw_rotated_text(), add_label_near_structure(), load_font()
-├── distractors/
-│   ├── charts.py            # bar / scatter / line / pie chart generators
-│   ├── shapes.py            # geometric shapes, noise patches, gradients
-│   └── text_elements.py     # prose blocks, captions, footnotes, arrows, tables
-├── generation/
-│   ├── page.py              # make_page(), make_negative_page(), apply_noise()
-│   └── dataset.py           # generate_dataset(), save_sample(), CLI entry point
-├── training/
-│   └── trainer.py           # train(), CLI entry point
-├── inference/
-│   ├── tiling.py            # generate_tiles()
-│   ├── nms.py               # nms()
-│   ├── pairing.py           # pair_detections() via Hungarian matching
-│   └── detector.py          # detect_tiled(), detect_full(), draw_boxes(), CLI
-└── viz/
-    └── labels.py            # visualize_split(), draw_boxes(), CLI entry point
-
-annotate/                    # Flask annotation tool (unchanged)
-config/
-├── data.yaml                # YOLO dataset paths
-└── pipeline.yaml
-data/                        # data files (gitignored)
-runs/                        # training checkpoints (gitignored)
-```
-
----
-
-## Data directory layout
-
-```
-data/
-├── smiles/
-│   └── chembl_smiles.csv    # ~20 k SMILES from ChEMBL
-├── fonts/                   # TTF/OTF fonts for label rendering
-├── distractors/             # ~1 k real photos (sf-download-distractors output)
-├── generated/               # synthetic dataset (sf-generate output)
-│   ├── train/
-│   └── val/
-└── real/                    # manually annotated real pages (sf-annotate output)
-    ├── images/
-    ├── labels/
-    └── ground_truth/
-```
-
----
-
-## YOLO label format
-
-Each `.txt` label file contains one line per annotated object:
-
-```
-<class_id> <cx> <cy> <w> <h>   (all normalised to [0, 1])
-```
-
-| class_id | name |
-|----------|------|
-| 0 | chemical_structure |
-| 1 | compound_label |
-
-Ground-truth JSON files in `ground_truth/` contain raw pixel coordinates plus `smiles` and `label_text` for downstream analysis.
-
----
-
-## Key design decisions
-
-- **Union bounding box** — each compound panel is annotated as the union of structure + label (1 class for YOLO). The GT JSON preserves the individual boxes.
-- **No horizontal flips** — chemical handedness matters; `fliplr=0` is enforced during training.
-- **15 % negative pages** — pages with no structures teach the model to output nothing for non-chemistry content.
-- **Multi-DPI generation** — pages at {96, 144, 200, 300} DPI create scale variance, improving robustness to different scanning resolutions.
-- **Tiled inference** — A4 pages (2480 × 3508 px) are tiled into 1536 px chunks with 20 % overlap to stay within GPU memory.
+Apache License 2.0
