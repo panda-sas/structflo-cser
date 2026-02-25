@@ -228,6 +228,7 @@ class ChemPipeline:
             import matplotlib.pyplot as plt
             from matplotlib.backends.backend_pdf import PdfPages
             from structflo.cser.viz import plot_results
+
             pdf_out: PdfPages | None = PdfPages(str(output_pdf))
         else:
             pdf_out = None
