@@ -295,10 +295,13 @@ All available commands:
 
 ## Notebooks
 
-| Notebook | Description |
-| -------- | ----------- |
-| [01-quickstart.ipynb](notebooks/01-quickstart.ipynb) | Step-by-step pipeline walkthrough: detect → match → enrich, then one-call convenience API |
-| [02-LPS.ipynb](notebooks/02-LPS.ipynb) | Using the Learned Pair Scorer for improved matching on complex document pages |
+| Notebook | Colab | Description |
+| -------- | ----------- | ----------- |
+| [01-quickstart.ipynb](notebooks/01-quickstart.ipynb) | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/panda-sas/structflo-cser/blob/main/notebooks/01-quickstart.ipynb) | Step-by-step pipeline walkthrough: detect → match → enrich, then one-call convenience API |
+| [02-LPS.ipynb](notebooks/02-LPS.ipynb) | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/panda-sas/structflo-cser/blob/main/notebooks/02-LPS.ipynb) | Using the Learned Pair Scorer for improved matching on complex document pages |
+
+
+
 
 ## License
 
